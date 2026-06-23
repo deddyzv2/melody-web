@@ -29,11 +29,23 @@
   text-transform: uppercase;
 }
 
-.workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr);
-  gap: 20px;
-  align-items: start;
+.main-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.main-tabs button {
+  flex: 0 0 auto;
+  background: #ffffff;
+  color: #374151;
+}
+
+.main-tabs button.active {
+  background: #111827;
+  color: #ffffff;
 }
 
 .panel {
@@ -55,6 +67,22 @@
   display: grid;
   gap: 10px;
   margin-bottom: 18px;
+}
+
+.relationship-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.relationship-form label {
+  display: grid;
+  gap: 6px;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .item-list {
@@ -186,6 +214,81 @@
   font-size: 0.85rem;
 }
 
+.relationship-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.relationship-list {
+  display: grid;
+  gap: 10px;
+}
+
+.relationship-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fbfcfe;
+  padding: 10px 12px;
+}
+
+.relationship-row span {
+  overflow-wrap: anywhere;
+}
+
+.map-section {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 18px;
+}
+
+.map-section h3 {
+  color: #111827;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.relationship-canvas {
+  width: 100%;
+  min-height: 360px;
+  border: 1px solid #d9dee8;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.relationship-line {
+  stroke: #64748b;
+  stroke-width: 2;
+}
+
+.relationship-label-bg {
+  fill: #ffffff;
+  stroke: #d9dee8;
+}
+
+.relationship-label {
+  fill: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.relationship-node rect {
+  fill: #111827;
+  stroke: #0f172a;
+}
+
+.relationship-node text {
+  fill: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
 .error-banner {
   display: flex;
   align-items: center;
@@ -270,7 +373,8 @@ textarea {
     flex-direction: column;
   }
 
-  .workspace-grid {
+  .relationship-form,
+  .relationship-row {
     grid-template-columns: 1fr;
   }
 

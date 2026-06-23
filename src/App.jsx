@@ -9,6 +9,12 @@ const emptyCharacter = {
   visual_notes: '',
 }
 
+const navigationTabs = [
+  { id: 'inbox', label: 'Inbox' },
+  { id: 'characters', label: 'Character Board' },
+  { id: 'relationships', label: 'Relationship Map' },
+]
+
 function formatDate(value) {
   if (!value) return ''
 
@@ -22,6 +28,38 @@ function isCharacterIncomplete(character) {
   return ['role', 'personality', 'visual_notes'].some(
     (field) => !character[field]?.trim(),
   )
+}
+
+function getCharacterDisplayName(character) {
+  return character?.name?.trim() || 'Karakter tanpa nama'
+}
+
+function buildCircularLayout(characters) {
+  const centerX = 360
+  const centerY = 220
+  const radius = characters.length <= 2 ? 130 : 160
+
+  if (characters.length === 1) {
+    return {
+      [characters[0].id]: {
+        x: centerX,
+        y: centerY,
+        name: getCharacterDisplayName(characters[0]),
+      },
+    }
+  }
+
+  return characters.reduce((positions, character, index) => {
+    const angle = (index / characters.length) * Math.PI * 2 - Math.PI / 2
+
+    positions[character.id] = {
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+      name: getCharacterDisplayName(character),
+    }
+
+    return positions
+  }, {})
 }
 
 function Inbox({ characters, inboxItems, onRefresh, onError }) {
@@ -302,9 +340,201 @@ function CharacterBoard({
   )
 }
 
+function RelationshipMap({
+  characters,
+  relationships,
+  onAddRelationship,
+  onDeleteRelationship,
+}) {
+  const [characterA, setCharacterA] = useState('')
+  const [characterB, setCharacterB] = useState('')
+  const [relationType, setRelationType] = useState('')
+  const [busyRelationshipId, setBusyRelationshipId] = useState(null)
+  const positions = buildCircularLayout(characters)
+
+  function getCharacterName(id) {
+    const character = characters.find((item) => item.id === id)
+    return getCharacterDisplayName(character)
+  }
+
+  async function submitRelationship(event) {
+    event.preventDefault()
+
+    if (!characterA || !characterB || !relationType.trim()) return
+
+    await onAddRelationship({
+      character_a: characterA,
+      character_b: characterB,
+      relation_type: relationType.trim(),
+    })
+
+    setCharacterA('')
+    setCharacterB('')
+    setRelationType('')
+  }
+
+  async function deleteRelationship(id) {
+    setBusyRelationshipId(id)
+    await onDeleteRelationship(id)
+    setBusyRelationshipId(null)
+  }
+
+  return (
+    <section className="panel relationship-panel">
+      <div className="section-heading">
+        <div>
+          <h2>Relationship Map</h2>
+          <p>Catat relasi antar karakter dan lihat petanya.</p>
+        </div>
+      </div>
+
+      <form className="relationship-form" onSubmit={submitRelationship}>
+        <label>
+          Karakter A
+          <select
+            value={characterA}
+            onChange={(event) => setCharacterA(event.target.value)}
+          >
+            <option value="">Pilih karakter</option>
+            {characters.map((character) => (
+              <option key={character.id} value={character.id}>
+                {getCharacterDisplayName(character)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Karakter B
+          <select
+            value={characterB}
+            onChange={(event) => setCharacterB(event.target.value)}
+          >
+            <option value="">Pilih karakter</option>
+            {characters.map((character) => (
+              <option key={character.id} value={character.id}>
+                {getCharacterDisplayName(character)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Jenis relasi
+          <input
+            value={relationType}
+            onChange={(event) => setRelationType(event.target.value)}
+            placeholder="menyukai, sahabat, guru, rival..."
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={
+            !characterA ||
+            !characterB ||
+            characterA === characterB ||
+            !relationType.trim()
+          }
+        >
+          Tambah relasi
+        </button>
+      </form>
+
+      <div className="relationship-list">
+        {relationships.length === 0 ? (
+          <p className="empty-state">Belum ada relasi.</p>
+        ) : (
+          relationships.map((relationship) => (
+            <article className="relationship-row" key={relationship.id}>
+              <span>
+                {getCharacterName(relationship.character_a)} -{' '}
+                {relationship.relation_type || 'relasi'} -{' '}
+                {getCharacterName(relationship.character_b)}
+              </span>
+              <button
+                type="button"
+                className="danger-button small-button"
+                onClick={() => deleteRelationship(relationship.id)}
+                disabled={busyRelationshipId === relationship.id}
+              >
+                Hapus
+              </button>
+            </article>
+          ))
+        )}
+      </div>
+
+      <section className="map-section">
+        <h3>Visualisasi peta relasi</h3>
+        {characters.length === 0 ? (
+          <p className="empty-state">Tambahkan karakter untuk mulai membuat peta.</p>
+        ) : (
+          <svg className="relationship-canvas" viewBox="0 0 720 440" role="img">
+            <title>Peta relasi karakter</title>
+            {relationships.map((relationship) => {
+              const source = positions[relationship.character_a]
+              const target = positions[relationship.character_b]
+              if (!source || !target) return null
+
+              const labelX = (source.x + target.x) / 2
+              const labelY = (source.y + target.y) / 2
+
+              return (
+                <g key={relationship.id}>
+                  <line
+                    className="relationship-line"
+                    x1={source.x}
+                    y1={source.y}
+                    x2={target.x}
+                    y2={target.y}
+                  />
+                  <rect
+                    className="relationship-label-bg"
+                    x={labelX - 52}
+                    y={labelY - 15}
+                    width="104"
+                    height="30"
+                    rx="6"
+                  />
+                  <text
+                    className="relationship-label"
+                    x={labelX}
+                    y={labelY + 4}
+                    textAnchor="middle"
+                  >
+                    {relationship.relation_type || 'relasi'}
+                  </text>
+                </g>
+              )
+            })}
+            {characters.map((character) => {
+              const position = positions[character.id]
+
+              return (
+                <g className="relationship-node" key={character.id}>
+                  <rect
+                    x={position.x - 72}
+                    y={position.y - 26}
+                    width="144"
+                    height="52"
+                    rx="10"
+                  />
+                  <text x={position.x} y={position.y + 5} textAnchor="middle">
+                    {position.name}
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
+        )}
+      </section>
+    </section>
+  )
+}
+
 function App() {
   const [characters, setCharacters] = useState([])
   const [inboxItems, setInboxItems] = useState([])
+  const [relationships, setRelationships] = useState([])
+  const [activeTab, setActiveTab] = useState('inbox')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [saveStatus, setSaveStatus] = useState({})
@@ -338,10 +568,24 @@ function App() {
     setInboxItems(data || [])
   }, [])
 
+  const loadRelationships = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('relationships')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setRelationships(data || [])
+  }, [])
+
   const loadData = useCallback(async () => {
-    await Promise.all([loadCharacters(), loadInboxItems()])
+    await Promise.all([loadCharacters(), loadInboxItems(), loadRelationships()])
     setIsLoading(false)
-  }, [loadCharacters, loadInboxItems])
+  }, [loadCharacters, loadInboxItems, loadRelationships])
 
   useEffect(() => {
     const initialLoad = setTimeout(() => {
@@ -442,6 +686,28 @@ function App() {
     await loadInboxItems()
   }
 
+  async function addRelationship(relationship) {
+    const { error } = await supabase.from('relationships').insert(relationship)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await loadRelationships()
+  }
+
+  async function deleteRelationship(id) {
+    const { error } = await supabase.from('relationships').delete().eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await loadRelationships()
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -472,22 +738,49 @@ function App() {
       {isLoading ? (
         <p className="loading-state">Memuat data dari Supabase...</p>
       ) : (
-        <div className="workspace-grid">
-          <Inbox
-            characters={characters}
-            inboxItems={inboxItems}
-            onRefresh={loadInboxItems}
-            onError={setErrorMessage}
-          />
-          <CharacterBoard
-            characters={characters}
-            inboxItems={inboxItems}
-            onAddCharacter={addCharacter}
-            onUpdateCharacter={updateCharacterField}
-            onUnlinkInboxItem={unlinkInboxItem}
-            saveStatus={saveStatus}
-          />
-        </div>
+        <>
+          <nav className="main-tabs" aria-label="Navigasi utama">
+            {navigationTabs.map((tab) => (
+              <button
+                type="button"
+                className={activeTab === tab.id ? 'active' : ''}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          {activeTab === 'inbox' && (
+            <Inbox
+              characters={characters}
+              inboxItems={inboxItems}
+              onRefresh={loadInboxItems}
+              onError={setErrorMessage}
+            />
+          )}
+
+          {activeTab === 'characters' && (
+            <CharacterBoard
+              characters={characters}
+              inboxItems={inboxItems}
+              onAddCharacter={addCharacter}
+              onUpdateCharacter={updateCharacterField}
+              onUnlinkInboxItem={unlinkInboxItem}
+              saveStatus={saveStatus}
+            />
+          )}
+
+          {activeTab === 'relationships' && (
+            <RelationshipMap
+              characters={characters}
+              relationships={relationships}
+              onAddRelationship={addRelationship}
+              onDeleteRelationship={deleteRelationship}
+            />
+          )}
+        </>
       )}
     </main>
   )
