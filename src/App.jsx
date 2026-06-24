@@ -1,4 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import ReactFlow, {
+  Background,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  addEdge,
+  useEdgesState,
+  useNodesState,
+} from 'reactflow'
+import 'reactflow/dist/style.css'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -217,7 +229,14 @@ function CharacterBoard({
   onUnlinkInboxItem,
   saveStatus,
 }) {
-  const [expandedCharacterKey, setExpandedCharacterKey] = useState(null)
+  const [selectedCharacterKey, setSelectedCharacterKey] = useState(null)
+  const selectedCharacter = characters.find((character, index) => {
+    const characterKey = character.id || `character-${index}`
+    return characterKey === selectedCharacterKey
+  })
+  const selectedRelatedIdeas = selectedCharacter
+    ? inboxItems.filter((item) => item.linked_to === selectedCharacter.id)
+    : []
 
   return (
     <section className="panel">
@@ -234,145 +253,133 @@ function CharacterBoard({
       {characters.length === 0 ? (
         <p className="empty-state">Belum ada karakter.</p>
       ) : (
-        <div className="character-grid">
-          {characters.map((character, index) => {
-            const characterKey = character.id || `character-${index}`
-            const isExpanded = expandedCharacterKey === characterKey
-            const incomplete = isCharacterIncomplete(character)
+        <>
+          <div className="character-grid">
+            {characters.map((character, index) => {
+              const characterKey = character.id || `character-${index}`
+              const isSelected = selectedCharacterKey === characterKey
+              const incomplete = isCharacterIncomplete(character)
 
-            return (
-              <article
-                className={`character-card ${incomplete ? 'incomplete' : ''}`}
-                key={characterKey}
-              >
-                <button
-                  type="button"
-                  className="card-summary"
-                  onClick={() =>
-                    setExpandedCharacterKey((current) =>
-                      current === characterKey ? null : characterKey,
-                    )
-                  }
+              return (
+                <article
+                  className={`character-card ${incomplete ? 'incomplete' : ''} ${
+                    isSelected ? 'selected' : ''
+                  }`}
+                  key={characterKey}
                 >
-                  <span>
-                    <strong>{character.name?.trim() || 'Karakter tanpa nama'}</strong>
-                    <small>{character.role?.trim() || 'Role belum diisi'}</small>
-                  </span>
-                  {incomplete && <span className="badge">Belum lengkap</span>}
-                </button>
+                  <button
+                    type="button"
+                    className="card-summary"
+                    onClick={() => setSelectedCharacterKey(characterKey)}
+                  >
+                    <span>
+                      <strong>
+                        {character.name?.trim() || 'Karakter tanpa nama'}
+                      </strong>
+                      <small>{character.role?.trim() || 'Role belum diisi'}</small>
+                    </span>
+                    {incomplete && <span className="badge">Belum lengkap</span>}
+                  </button>
+                </article>
+              )
+            })}
+          </div>
 
-                <div
-                  className={`character-expand ${isExpanded ? 'expanded' : ''}`}
-                  aria-hidden={!isExpanded}
-                >
-                  <div className="character-expand-inner">
-                    <div className="character-form">
-                      <div className="character-form-header">
-                        <h3>Edit karakter</h3>
-                        <button
-                          type="button"
-                          className="small-button"
-                          onClick={() => setExpandedCharacterKey(null)}
-                          tabIndex={isExpanded ? 0 : -1}
-                        >
-                          Tutup
-                        </button>
-                      </div>
-                      <label>
-                        Nama
-                        <input
-                          value={character.name || ''}
-                          onChange={(event) =>
-                            onUpdateCharacter(
-                              character.id,
-                              'name',
-                              event.target.value,
-                            )
-                          }
-                          tabIndex={isExpanded ? 0 : -1}
-                        />
-                      </label>
-                      <label>
-                        Role
-                        <input
-                          value={character.role || ''}
-                          onChange={(event) =>
-                            onUpdateCharacter(
-                              character.id,
-                              'role',
-                              event.target.value,
-                            )
-                          }
-                          tabIndex={isExpanded ? 0 : -1}
-                        />
-                      </label>
-                      <label>
-                        Personality
-                        <textarea
-                          value={character.personality || ''}
-                          onChange={(event) =>
-                            onUpdateCharacter(
-                              character.id,
-                              'personality',
-                              event.target.value,
-                            )
-                          }
-                          rows={4}
-                          tabIndex={isExpanded ? 0 : -1}
-                        />
-                      </label>
-                      <label>
-                        Visual notes
-                        <textarea
-                          value={character.visual_notes || ''}
-                          onChange={(event) =>
-                            onUpdateCharacter(
-                              character.id,
-                              'visual_notes',
-                              event.target.value,
-                            )
-                          }
-                          rows={4}
-                          tabIndex={isExpanded ? 0 : -1}
-                        />
-                      </label>
-                      <div className="related-ideas">
-                        <h3>Ide terkait</h3>
-                        {inboxItems.filter((item) => item.linked_to === character.id)
-                          .length === 0 ? (
-                          <p className="related-placeholder">
-                            Belum ada ide yang ditempel
-                          </p>
-                        ) : (
-                          <div className="related-list">
-                            {inboxItems
-                              .filter((item) => item.linked_to === character.id)
-                              .map((item) => (
-                                <article className="related-item" key={item.id}>
-                                  <p>{item.content}</p>
-                                  <button
-                                    type="button"
-                                    className="small-button"
-                                    onClick={() => onUnlinkInboxItem(item.id)}
-                                    tabIndex={isExpanded ? 0 : -1}
-                                  >
-                                    Lepas
-                                  </button>
-                                </article>
-                              ))}
-                          </div>
-                        )}
-                      </div>
-                      <p className="save-status">
-                        {saveStatus[character.id] || 'Perubahan tersimpan otomatis'}
-                      </p>
-                    </div>
-                  </div>
+          <section className="character-detail-panel">
+            {selectedCharacter ? (
+              <div className="character-form">
+                <div className="character-form-header">
+                  <h3>Panel Detail Karakter</h3>
                 </div>
-              </article>
-            )
-          })}
-        </div>
+                <label>
+                  Nama
+                  <input
+                    value={selectedCharacter.name || ''}
+                    onChange={(event) =>
+                      onUpdateCharacter(
+                        selectedCharacter.id,
+                        'name',
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Role
+                  <input
+                    value={selectedCharacter.role || ''}
+                    onChange={(event) =>
+                      onUpdateCharacter(
+                        selectedCharacter.id,
+                        'role',
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Personality
+                  <textarea
+                    value={selectedCharacter.personality || ''}
+                    onChange={(event) =>
+                      onUpdateCharacter(
+                        selectedCharacter.id,
+                        'personality',
+                        event.target.value,
+                      )
+                    }
+                    rows={4}
+                  />
+                </label>
+                <label>
+                  Visual notes
+                  <textarea
+                    value={selectedCharacter.visual_notes || ''}
+                    onChange={(event) =>
+                      onUpdateCharacter(
+                        selectedCharacter.id,
+                        'visual_notes',
+                        event.target.value,
+                      )
+                    }
+                    rows={4}
+                  />
+                </label>
+                <div className="related-ideas">
+                  <h3>Ide terkait</h3>
+                  {selectedRelatedIdeas.length === 0 ? (
+                    <p className="related-placeholder">
+                      Belum ada ide yang ditempel
+                    </p>
+                  ) : (
+                    <div className="related-list">
+                      {selectedRelatedIdeas.map((item) => (
+                        <article className="related-item" key={item.id}>
+                          <p>{item.content}</p>
+                          <button
+                            type="button"
+                            className="small-button"
+                            onClick={() => onUnlinkInboxItem(item.id)}
+                          >
+                            Lepas
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="save-status">
+                  {saveStatus[selectedCharacter.id] ||
+                    'Perubahan tersimpan otomatis'}
+                </p>
+              </div>
+            ) : (
+              <p className="empty-state">
+                Klik salah satu kartu di atas untuk melihat & edit detailnya.
+              </p>
+            )}
+          </section>
+        </>
       )}
     </section>
   )
@@ -685,28 +692,64 @@ function ChapterEditor({
   )
 }
 
+function StoryNode({ data }) {
+  return (
+    <div className="story-flow-node">
+      <Handle className="story-flow-handle" type="target" position={Position.Left} />
+      <button
+        type="button"
+        className="story-flow-node-title"
+        onClick={data.onSelect}
+      >
+        {data.title || 'Fragment tanpa judul'}
+      </button>
+      <button
+        type="button"
+        className="story-flow-add"
+        onClick={(event) => {
+          event.stopPropagation()
+          data.onAddChild()
+        }}
+        aria-label="Tambah fragment lanjutan"
+      >
+        +
+      </button>
+      <Handle
+        className="story-flow-handle"
+        type="source"
+        position={Position.Right}
+      />
+    </div>
+  )
+}
+
+const storyNodeTypes = { storyNode: StoryNode }
+
 function TimelinePlot({
   characters,
   storyFragments,
+  fragmentConnections,
   fragmentCharacters,
   onAddFragment,
   onDeleteFragment,
   onAttachFragmentCharacter,
   onDetachFragmentCharacter,
-  onMoveFragment,
-  onUpdateFragmentRoute,
+  onAddChildFragment,
+  onAddFragmentConnection,
+  onDeleteFragmentConnection,
+  onUpdateFragmentPosition,
+  onUpdateFragmentDetail,
 }) {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
-  const [selectedRoute, setSelectedRoute] = useState('Rute Utama')
-  const [activeRoute, setActiveRoute] = useState('Rute Utama')
-  const [customRoutes, setCustomRoutes] = useState([])
-  const [newRouteName, setNewRouteName] = useState('')
+  const [selectedFragmentId, setSelectedFragmentId] = useState(null)
+  const [selectedConnectionId, setSelectedConnectionId] = useState(null)
   const [selectedFormCharacterIds, setSelectedFormCharacterIds] = useState([])
   const [isFormPickerOpen, setIsFormPickerOpen] = useState(false)
-  const [expandedId, setExpandedId] = useState(null)
   const [openPickerId, setOpenPickerId] = useState(null)
   const [busyFragmentId, setBusyFragmentId] = useState(null)
+  const [nodes, setNodes, onNodesChange] = useNodesState([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const boardRef = useRef(null)
 
   useEffect(() => {
@@ -724,46 +767,12 @@ function TimelinePlot({
     }
   }, [])
 
-  async function submitFragment(event) {
-    event.preventDefault()
-
-    if (!title.trim() && !content.trim()) return
-
-    await onAddFragment({
-      title: title.trim() || 'Potongan tanpa judul',
-      content: content.trim(),
-      route_name: selectedRoute,
-      characterIds: selectedFormCharacterIds,
-    })
-
-    setTitle('')
-    setContent('')
-    setSelectedFormCharacterIds([])
-    setIsFormPickerOpen(false)
-  }
-
-  const routeNames = Array.from(
-    new Set([
-      'Rute Utama',
-      ...customRoutes,
-      ...storyFragments.map((fragment) => fragment.route_name || 'Rute Utama'),
-    ]),
+  const selectedFragment = storyFragments.find(
+    (fragment) => fragment.id === selectedFragmentId,
   )
-  const filteredFragments = storyFragments.filter(
-    (fragment) => (fragment.route_name || 'Rute Utama') === activeRoute,
+  const selectedConnection = fragmentConnections.find(
+    (connection) => connection.id === selectedConnectionId,
   )
-
-  function addRoute() {
-    const trimmedRoute = newRouteName.trim()
-    if (!trimmedRoute) return
-
-    setSelectedRoute(trimmedRoute)
-    setActiveRoute(trimmedRoute)
-    setCustomRoutes((current) =>
-      current.includes(trimmedRoute) ? current : [...current, trimmedRoute],
-    )
-    setNewRouteName('')
-  }
 
   function getLinkedCharacterIds(fragmentId) {
     return fragmentCharacters
@@ -774,6 +783,93 @@ function TimelinePlot({
   function getCharacterName(id) {
     const character = characters.find((item) => item.id === id)
     return getCharacterDisplayName(character)
+  }
+
+  useEffect(() => {
+    setNodes(
+      storyFragments.map((fragment, index) => ({
+        id: fragment.id,
+        type: 'storyNode',
+        position: {
+          x: Number(fragment.position_x ?? 120 + index * 48),
+          y: Number(fragment.position_y ?? 120 + index * 36),
+        },
+        data: {
+          title: fragment.title,
+          onSelect: () => {
+            setSelectedFragmentId(fragment.id)
+            setSelectedConnectionId(null)
+          },
+          onAddChild: () => onAddChildFragment(fragment),
+        },
+      })),
+    )
+  }, [onAddChildFragment, setNodes, storyFragments])
+
+  useEffect(() => {
+    setEdges(
+      fragmentConnections.map((connection) => ({
+        id: connection.id,
+        source: connection.from_fragment_id,
+        target: connection.to_fragment_id,
+        label: connection.label || undefined,
+        type: 'smoothstep',
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: '#5d83c7',
+        },
+        className: 'story-flow-edge',
+        labelBgClassName: 'story-flow-edge-label-bg',
+        labelClassName: 'story-flow-edge-label',
+      })),
+    )
+  }, [fragmentConnections, setEdges])
+
+  async function submitFragment(event) {
+    event.preventDefault()
+
+    if (!title.trim() && !content.trim()) return
+
+    const createdFragment = await onAddFragment({
+      title: title.trim() || 'Fragment baru',
+      content: content.trim(),
+      position_x: 120,
+      position_y: 120,
+      characterIds: selectedFormCharacterIds,
+    })
+
+    if (createdFragment?.id) setSelectedFragmentId(createdFragment.id)
+
+    setTitle('')
+    setContent('')
+    setSelectedFormCharacterIds([])
+    setIsFormPickerOpen(false)
+  }
+
+  const connectFragments = useCallback(
+    async (connection) => {
+      if (!connection.source || !connection.target) return
+
+      setEdges((currentEdges) =>
+        addEdge(
+          {
+            ...connection,
+            type: 'smoothstep',
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#5d83c7',
+            },
+          },
+          currentEdges,
+        ),
+      )
+      await onAddFragmentConnection(connection.source, connection.target)
+    },
+    [onAddFragmentConnection, setEdges],
+  )
+
+  async function moveNodeEnd(_event, node) {
+    await onUpdateFragmentPosition(node.id, node.position.x, node.position.y)
   }
 
   async function toggleFragmentCharacter(fragmentId, characterId, isChecked) {
@@ -798,50 +894,168 @@ function TimelinePlot({
     })
   }
 
-  async function moveFragment(fragmentId, direction) {
-    setBusyFragmentId(fragmentId)
-    await onMoveFragment(fragmentId, direction, activeRoute)
-    setBusyFragmentId(null)
-  }
-
   async function deleteFragment(fragmentId) {
     setBusyFragmentId(fragmentId)
     await onDeleteFragment(fragmentId)
+    if (selectedFragmentId === fragmentId) setSelectedFragmentId(null)
     setBusyFragmentId(null)
   }
 
   return (
     <div className="timeline-panel" ref={boardRef}>
-      <div className="route-toolbar">
-        <label>
-          Rute
-          <select
-            value={activeRoute}
-            onChange={(event) => {
-              setActiveRoute(event.target.value)
-              setSelectedRoute(event.target.value)
-            }}
-          >
-            {routeNames.map((routeName) => (
-              <option key={routeName} value={routeName}>
-                {routeName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="new-route-form">
-          <input
-            value={newRouteName}
-            onChange={(event) => setNewRouteName(event.target.value)}
-            placeholder="Nama rute baru"
+      <div className="story-flow-canvas">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={storyNodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={connectFragments}
+          onNodeDragStop={moveNodeEnd}
+          onNodeClick={(_event, node) => {
+            setSelectedFragmentId(node.id)
+            setSelectedConnectionId(null)
+          }}
+          onEdgeClick={(_event, edge) => {
+            setSelectedConnectionId(edge.id)
+            setSelectedFragmentId(null)
+          }}
+          fitView
+        >
+          <Background color="#d8e6f8" gap={22} />
+          <MiniMap
+            nodeColor="#8fb0e2"
+            maskColor="rgba(232, 243, 255, 0.72)"
           />
-          <button type="button" onClick={addRoute} disabled={!newRouteName.trim()}>
-            + Rute baru
-          </button>
-        </div>
+          <Controls />
+        </ReactFlow>
       </div>
 
+      {selectedConnection && (
+        <div className="edge-action-bar">
+          <span>Panah terpilih</span>
+          <button
+            type="button"
+            className="danger-button small-button"
+            onClick={() => {
+              onDeleteFragmentConnection(selectedConnection.id)
+              setSelectedConnectionId(null)
+            }}
+          >
+            Hapus panah
+          </button>
+        </div>
+      )}
+
+      <section className="fragment-detail-panel">
+        {selectedFragment ? (
+          <>
+            <div className="fragment-detail-header">
+              <h3>Detail fragment</h3>
+              <button
+                type="button"
+                className="danger-button small-button"
+                onClick={() => deleteFragment(selectedFragment.id)}
+                disabled={busyFragmentId === selectedFragment.id}
+              >
+                Hapus fragment
+              </button>
+            </div>
+            <input
+              value={selectedFragment.title || ''}
+              onChange={(event) =>
+                onUpdateFragmentDetail(
+                  selectedFragment.id,
+                  'title',
+                  event.target.value,
+                )
+              }
+              placeholder="Judul fragment"
+            />
+            <textarea
+              value={selectedFragment.content || ''}
+              onChange={(event) =>
+                onUpdateFragmentDetail(
+                  selectedFragment.id,
+                  'content',
+                  event.target.value,
+                )
+              }
+              placeholder="Isi/catatan"
+              rows={7}
+            />
+            <div className="character-picker">
+              <button
+                type="button"
+                className="character-picker-trigger"
+                onClick={() =>
+                  setOpenPickerId((current) =>
+                    current === selectedFragment.id ? null : selectedFragment.id,
+                  )
+                }
+              >
+                {getLinkedCharacterIds(selectedFragment.id).length === 0
+                  ? '+ Pilih karakter'
+                  : `${getLinkedCharacterIds(selectedFragment.id).length} karakter terpilih`}
+              </button>
+
+              {openPickerId === selectedFragment.id && (
+                <div className="checkbox-popover">
+                  {characters.length === 0 ? (
+                    <p className="empty-state">Belum ada karakter untuk dipilih.</p>
+                  ) : (
+                    <div className="checkbox-list">
+                      {characters.map((character) => {
+                        const linkedCharacterIds = getLinkedCharacterIds(
+                          selectedFragment.id,
+                        )
+                        const isChecked = linkedCharacterIds.includes(character.id)
+
+                        return (
+                          <label className="checkbox-option" key={character.id}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(event) =>
+                                toggleFragmentCharacter(
+                                  selectedFragment.id,
+                                  character.id,
+                                  event.target.checked,
+                                )
+                              }
+                              disabled={busyFragmentId === selectedFragment.id}
+                            />
+                            <span>{getCharacterDisplayName(character)}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="fragment-badges">
+                {getLinkedCharacterIds(selectedFragment.id).length === 0 ? (
+                  <span className="muted-badge">Belum ada karakter</span>
+                ) : (
+                  getLinkedCharacterIds(selectedFragment.id).map((characterId) => (
+                    <span className="character-badge" key={characterId}>
+                      {getCharacterName(characterId)}
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="empty-state">
+            Klik salah satu kartu di atas untuk melihat & edit detailnya
+          </p>
+        )}
+      </section>
+
       <form className="story-form" onSubmit={submitFragment}>
+        <h3>Tambah fragment lepas</h3>
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
@@ -853,19 +1067,6 @@ function TimelinePlot({
           placeholder="Isi/catatan"
           rows={4}
         />
-        <label className="route-select-label">
-          Masuk rute
-          <select
-            value={selectedRoute}
-            onChange={(event) => setSelectedRoute(event.target.value)}
-          >
-            {routeNames.map((routeName) => (
-              <option key={routeName} value={routeName}>
-                {routeName}
-              </option>
-            ))}
-          </select>
-        </label>
         <div className="character-picker">
           <button
             type="button"
@@ -922,157 +1123,6 @@ function TimelinePlot({
           Tambah
         </button>
       </form>
-
-      {filteredFragments.length === 0 ? (
-        <p className="empty-state">Belum ada potongan cerita di rute ini.</p>
-      ) : (
-        <div className="story-list timeline-list">
-          {filteredFragments.map((fragment, index) => {
-            const linkedCharacterIds = getLinkedCharacterIds(fragment.id)
-            const isExpanded = expandedId === fragment.id
-            const visibleContent =
-              isExpanded || fragment.content.length <= 180
-                ? fragment.content
-                : `${fragment.content.slice(0, 180)}...`
-
-            return (
-              <article className="story-card" key={fragment.id}>
-                <button
-                  type="button"
-                  className="story-summary"
-                  onClick={() =>
-                    setExpandedId((current) =>
-                      current === fragment.id ? null : fragment.id,
-                    )
-                  }
-                >
-                  <span>
-                    <strong>{fragment.title || 'Potongan tanpa judul'}</strong>
-                    <small>Urutan {fragment.order_index}</small>
-                  </span>
-                </button>
-
-                <p className="story-content">
-                  {visibleContent || 'Belum ada isi/catatan.'}
-                </p>
-
-                <label className="route-select-label compact">
-                  Rute fragment
-                  <select
-                    value={fragment.route_name || 'Rute Utama'}
-                    onChange={(event) =>
-                      onUpdateFragmentRoute(fragment.id, event.target.value)
-                    }
-                  >
-                    {routeNames.map((routeName) => (
-                      <option key={routeName} value={routeName}>
-                        {routeName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="character-picker">
-                  <button
-                    type="button"
-                    className="character-picker-trigger"
-                    onClick={() =>
-                      setOpenPickerId((current) =>
-                        current === fragment.id ? null : fragment.id,
-                      )
-                    }
-                  >
-                    {linkedCharacterIds.length === 0
-                      ? '+ Pilih karakter'
-                      : `${linkedCharacterIds.length} karakter terpilih`}
-                  </button>
-
-                  {openPickerId === fragment.id && (
-                    <div className="checkbox-popover">
-                      {characters.length === 0 ? (
-                        <p className="empty-state">
-                          Belum ada karakter untuk dipilih.
-                        </p>
-                      ) : (
-                        <div className="checkbox-list">
-                          {characters.map((character) => {
-                            const isChecked = linkedCharacterIds.includes(
-                              character.id,
-                            )
-
-                            return (
-                              <label
-                                className="checkbox-option"
-                                key={character.id}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={(event) =>
-                                    toggleFragmentCharacter(
-                                      fragment.id,
-                                      character.id,
-                                      event.target.checked,
-                                    )
-                                  }
-                                  disabled={busyFragmentId === fragment.id}
-                                />
-                                <span>{getCharacterDisplayName(character)}</span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="fragment-badges">
-                    {linkedCharacterIds.length === 0 ? (
-                      <span className="muted-badge">Belum ada karakter</span>
-                    ) : (
-                      linkedCharacterIds.map((characterId) => (
-                        <span className="character-badge" key={characterId}>
-                          {getCharacterName(characterId)}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="story-actions">
-                  <button
-                    type="button"
-                    className="small-button"
-                    onClick={() => moveFragment(fragment.id, 'up')}
-                    disabled={index === 0 || busyFragmentId === fragment.id}
-                  >
-                    Atas
-                  </button>
-                  <button
-                    type="button"
-                    className="small-button"
-                    onClick={() => moveFragment(fragment.id, 'down')}
-                    disabled={
-                      index === filteredFragments.length - 1 ||
-                      busyFragmentId === fragment.id
-                    }
-                  >
-                    Bawah
-                  </button>
-                  <button
-                    type="button"
-                    className="danger-button small-button"
-                    onClick={() => deleteFragment(fragment.id)}
-                    disabled={busyFragmentId === fragment.id}
-                  >
-                    Hapus
-                  </button>
-                </div>
-              </article>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }
@@ -1253,6 +1303,7 @@ function ComicVersion({
 function StoryBoard({
   characters,
   storyFragments,
+  fragmentConnections,
   fragmentCharacters,
   storyChapters,
   selectedChapterIds,
@@ -1261,8 +1312,11 @@ function StoryBoard({
   onDeleteFragment,
   onAttachFragmentCharacter,
   onDetachFragmentCharacter,
-  onMoveFragment,
-  onUpdateFragmentRoute,
+  onAddChildFragment,
+  onAddFragmentConnection,
+  onDeleteFragmentConnection,
+  onUpdateFragmentPosition,
+  onUpdateFragmentDetail,
   onSelectChapter,
   onAddChapter,
   onDeleteChapter,
@@ -1336,13 +1390,17 @@ function StoryBoard({
         <TimelinePlot
           characters={characters}
           storyFragments={storyFragments}
+          fragmentConnections={fragmentConnections}
           fragmentCharacters={fragmentCharacters}
           onAddFragment={onAddFragment}
           onDeleteFragment={onDeleteFragment}
           onAttachFragmentCharacter={onAttachFragmentCharacter}
           onDetachFragmentCharacter={onDetachFragmentCharacter}
-          onMoveFragment={onMoveFragment}
-          onUpdateFragmentRoute={onUpdateFragmentRoute}
+          onAddChildFragment={onAddChildFragment}
+          onAddFragmentConnection={onAddFragmentConnection}
+          onDeleteFragmentConnection={onDeleteFragmentConnection}
+          onUpdateFragmentPosition={onUpdateFragmentPosition}
+          onUpdateFragmentDetail={onUpdateFragmentDetail}
         />
       )}
 
@@ -1370,6 +1428,7 @@ function App() {
   const [inboxItems, setInboxItems] = useState([])
   const [relationships, setRelationships] = useState([])
   const [storyFragments, setStoryFragments] = useState([])
+  const [fragmentConnections, setFragmentConnections] = useState([])
   const [fragmentCharacters, setFragmentCharacters] = useState([])
   const [storyChapters, setStoryChapters] = useState([])
   const [comicPages, setComicPages] = useState([])
@@ -1387,6 +1446,7 @@ function App() {
   const saveTimers = useRef(new Map())
   const chapterSaveTimers = useRef(new Map())
   const comicSaveTimers = useRef(new Map())
+  const fragmentSaveTimers = useRef(new Map())
 
   const loadCharacters = useCallback(async () => {
     const { data, error } = await supabase
@@ -1443,6 +1503,20 @@ function App() {
     }
 
     setStoryFragments(data || [])
+  }, [])
+
+  const loadFragmentConnections = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('fragment_connections')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setFragmentConnections(data || [])
   }, [])
 
   const loadFragmentCharacters = useCallback(async () => {
@@ -1506,6 +1580,7 @@ function App() {
       loadInboxItems(),
       loadRelationships(),
       loadStoryFragments(),
+      loadFragmentConnections(),
       loadFragmentCharacters(),
       loadStoryChapters(),
       loadComicPages(),
@@ -1517,6 +1592,7 @@ function App() {
     loadInboxItems,
     loadRelationships,
     loadStoryFragments,
+    loadFragmentConnections,
     loadFragmentCharacters,
     loadStoryChapters,
     loadComicPages,
@@ -1535,11 +1611,13 @@ function App() {
     const timers = saveTimers.current
     const chapterTimers = chapterSaveTimers.current
     const comicTimers = comicSaveTimers.current
+    const fragmentTimers = fragmentSaveTimers.current
 
     return () => {
       timers.forEach((timer) => clearTimeout(timer))
       chapterTimers.forEach((timer) => clearTimeout(timer))
       comicTimers.forEach((timer) => clearTimeout(timer))
+      fragmentTimers.forEach((timer) => clearTimeout(timer))
     }
   }, [])
 
@@ -1663,6 +1741,8 @@ function App() {
       .from('story_fragments')
       .insert({
         ...fragmentFields,
+        position_x: fragmentFields.position_x ?? 120,
+        position_y: fragmentFields.position_y ?? 120,
         order_index: nextOrderIndex,
       })
       .select()
@@ -1685,11 +1765,12 @@ function App() {
 
       if (linkError) {
         setErrorMessage(linkError.message)
-        return
+        return null
       }
     }
 
     await Promise.all([loadStoryFragments(), loadFragmentCharacters()])
+    return data
   }
 
   async function deleteFragment(id) {
@@ -1700,7 +1781,110 @@ function App() {
       return
     }
 
-    await Promise.all([loadStoryFragments(), loadFragmentCharacters()])
+    await Promise.all([
+      loadStoryFragments(),
+      loadFragmentCharacters(),
+      loadFragmentConnections(),
+    ])
+  }
+
+  async function addChildFragment(parentFragment) {
+    const child = await addFragment({
+      title: 'Fragment baru',
+      content: '',
+      position_x: Number(parentFragment.position_x ?? 120) + 260,
+      position_y: Number(parentFragment.position_y ?? 120) + 90,
+      characterIds: [],
+    })
+
+    if (child?.id) {
+      await addFragmentConnection(parentFragment.id, child.id)
+    }
+  }
+
+  async function addFragmentConnection(sourceId, targetId) {
+    if (sourceId === targetId) return
+
+    const { error } = await supabase.from('fragment_connections').insert({
+      from_fragment_id: sourceId,
+      to_fragment_id: targetId,
+      label: null,
+    })
+
+    if (error) {
+      setErrorMessage(error.message)
+      await loadFragmentConnections()
+      return
+    }
+
+    await loadFragmentConnections()
+  }
+
+  async function deleteFragmentConnection(id) {
+    const { error } = await supabase
+      .from('fragment_connections')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await loadFragmentConnections()
+  }
+
+  async function updateFragmentPosition(id, x, y) {
+    const { error } = await supabase
+      .from('story_fragments')
+      .update({
+        position_x: x,
+        position_y: y,
+      })
+      .eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setStoryFragments((current) =>
+      current.map((fragment) =>
+        fragment.id === id
+          ? { ...fragment, position_x: x, position_y: y }
+          : fragment,
+      ),
+    )
+  }
+
+  function updateFragmentDetail(id, field, value) {
+    const fragment = storyFragments.find((item) => item.id === id)
+    if (!fragment) return
+
+    const updatedFragment = { ...fragment, [field]: value }
+    setStoryFragments((current) =>
+      current.map((item) => (item.id === id ? updatedFragment : item)),
+    )
+    scheduleFragmentSave(updatedFragment)
+  }
+
+  function scheduleFragmentSave(fragment) {
+    const currentTimer = fragmentSaveTimers.current.get(fragment.id)
+    if (currentTimer) clearTimeout(currentTimer)
+
+    const timer = setTimeout(async () => {
+      const { error } = await supabase
+        .from('story_fragments')
+        .update({
+          title: fragment.title,
+          content: fragment.content,
+        })
+        .eq('id', fragment.id)
+
+      if (error) setErrorMessage(error.message)
+    }, 800)
+
+    fragmentSaveTimers.current.set(fragment.id, timer)
   }
 
   async function attachFragmentCharacter(fragmentId, characterId) {
@@ -1737,65 +1921,6 @@ function App() {
     }
 
     await loadFragmentCharacters()
-  }
-
-  async function moveFragment(fragmentId, direction, routeName = 'Rute Utama') {
-    const scopedFragments = storyFragments.filter(
-      (item) => (item.route_name || 'Rute Utama') === routeName,
-    )
-    const currentIndex = scopedFragments.findIndex((item) => item.id === fragmentId)
-    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-    const currentFragment = scopedFragments[currentIndex]
-    const targetFragment = scopedFragments[targetIndex]
-
-    if (!currentFragment || !targetFragment) return
-
-    const { error: currentError } = await supabase
-      .from('story_fragments')
-      .update({ order_index: targetFragment.order_index })
-      .eq('id', currentFragment.id)
-
-    if (currentError) {
-      setErrorMessage(currentError.message)
-      return
-    }
-
-    const { error: targetError } = await supabase
-      .from('story_fragments')
-      .update({ order_index: currentFragment.order_index })
-      .eq('id', targetFragment.id)
-
-    if (targetError) {
-      setErrorMessage(targetError.message)
-      return
-    }
-
-    await loadStoryFragments()
-  }
-
-  async function updateFragmentRoute(fragmentId, routeName) {
-    const nextOrderIndex =
-      storyFragments
-        .filter((item) => (item.route_name || 'Rute Utama') === routeName)
-        .reduce(
-          (highest, item) => Math.max(highest, item.order_index ?? 0),
-          0,
-        ) + 1
-
-    const { error } = await supabase
-      .from('story_fragments')
-      .update({
-        route_name: routeName,
-        order_index: nextOrderIndex,
-      })
-      .eq('id', fragmentId)
-
-    if (error) {
-      setErrorMessage(error.message)
-      return
-    }
-
-    await loadStoryFragments()
   }
 
   function selectChapter(type, id) {
@@ -2264,6 +2389,7 @@ function App() {
             <StoryBoard
               characters={characters}
               storyFragments={storyFragments}
+              fragmentConnections={fragmentConnections}
               fragmentCharacters={fragmentCharacters}
               storyChapters={storyChapters}
               selectedChapterIds={selectedChapterIds}
@@ -2275,8 +2401,11 @@ function App() {
               onDeleteFragment={deleteFragment}
               onAttachFragmentCharacter={attachFragmentCharacter}
               onDetachFragmentCharacter={detachFragmentCharacter}
-              onMoveFragment={moveFragment}
-              onUpdateFragmentRoute={updateFragmentRoute}
+              onAddChildFragment={addChildFragment}
+              onAddFragmentConnection={addFragmentConnection}
+              onDeleteFragmentConnection={deleteFragmentConnection}
+              onUpdateFragmentPosition={updateFragmentPosition}
+              onUpdateFragmentDetail={updateFragmentDetail}
               onSelectChapter={selectChapter}
               onAddChapter={addChapter}
               onDeleteChapter={deleteChapter}
