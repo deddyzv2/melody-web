@@ -694,9 +694,14 @@ function TimelinePlot({
   onAttachFragmentCharacter,
   onDetachFragmentCharacter,
   onMoveFragment,
+  onUpdateFragmentRoute,
 }) {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [selectedRoute, setSelectedRoute] = useState('Rute Utama')
+  const [activeRoute, setActiveRoute] = useState('Rute Utama')
+  const [customRoutes, setCustomRoutes] = useState([])
+  const [newRouteName, setNewRouteName] = useState('')
   const [selectedFormCharacterIds, setSelectedFormCharacterIds] = useState([])
   const [isFormPickerOpen, setIsFormPickerOpen] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
@@ -727,6 +732,7 @@ function TimelinePlot({
     await onAddFragment({
       title: title.trim() || 'Potongan tanpa judul',
       content: content.trim(),
+      route_name: selectedRoute,
       characterIds: selectedFormCharacterIds,
     })
 
@@ -734,6 +740,29 @@ function TimelinePlot({
     setContent('')
     setSelectedFormCharacterIds([])
     setIsFormPickerOpen(false)
+  }
+
+  const routeNames = Array.from(
+    new Set([
+      'Rute Utama',
+      ...customRoutes,
+      ...storyFragments.map((fragment) => fragment.route_name || 'Rute Utama'),
+    ]),
+  )
+  const filteredFragments = storyFragments.filter(
+    (fragment) => (fragment.route_name || 'Rute Utama') === activeRoute,
+  )
+
+  function addRoute() {
+    const trimmedRoute = newRouteName.trim()
+    if (!trimmedRoute) return
+
+    setSelectedRoute(trimmedRoute)
+    setActiveRoute(trimmedRoute)
+    setCustomRoutes((current) =>
+      current.includes(trimmedRoute) ? current : [...current, trimmedRoute],
+    )
+    setNewRouteName('')
   }
 
   function getLinkedCharacterIds(fragmentId) {
@@ -771,7 +800,7 @@ function TimelinePlot({
 
   async function moveFragment(fragmentId, direction) {
     setBusyFragmentId(fragmentId)
-    await onMoveFragment(fragmentId, direction)
+    await onMoveFragment(fragmentId, direction, activeRoute)
     setBusyFragmentId(null)
   }
 
@@ -783,6 +812,35 @@ function TimelinePlot({
 
   return (
     <div className="timeline-panel" ref={boardRef}>
+      <div className="route-toolbar">
+        <label>
+          Rute
+          <select
+            value={activeRoute}
+            onChange={(event) => {
+              setActiveRoute(event.target.value)
+              setSelectedRoute(event.target.value)
+            }}
+          >
+            {routeNames.map((routeName) => (
+              <option key={routeName} value={routeName}>
+                {routeName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="new-route-form">
+          <input
+            value={newRouteName}
+            onChange={(event) => setNewRouteName(event.target.value)}
+            placeholder="Nama rute baru"
+          />
+          <button type="button" onClick={addRoute} disabled={!newRouteName.trim()}>
+            + Rute baru
+          </button>
+        </div>
+      </div>
+
       <form className="story-form" onSubmit={submitFragment}>
         <input
           value={title}
@@ -795,6 +853,19 @@ function TimelinePlot({
           placeholder="Isi/catatan"
           rows={4}
         />
+        <label className="route-select-label">
+          Masuk rute
+          <select
+            value={selectedRoute}
+            onChange={(event) => setSelectedRoute(event.target.value)}
+          >
+            {routeNames.map((routeName) => (
+              <option key={routeName} value={routeName}>
+                {routeName}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="character-picker">
           <button
             type="button"
@@ -852,11 +923,11 @@ function TimelinePlot({
         </button>
       </form>
 
-      {storyFragments.length === 0 ? (
-        <p className="empty-state">Belum ada potongan cerita.</p>
+      {filteredFragments.length === 0 ? (
+        <p className="empty-state">Belum ada potongan cerita di rute ini.</p>
       ) : (
-        <div className="story-list">
-          {storyFragments.map((fragment, index) => {
+        <div className="story-list timeline-list">
+          {filteredFragments.map((fragment, index) => {
             const linkedCharacterIds = getLinkedCharacterIds(fragment.id)
             const isExpanded = expandedId === fragment.id
             const visibleContent =
@@ -884,6 +955,22 @@ function TimelinePlot({
                 <p className="story-content">
                   {visibleContent || 'Belum ada isi/catatan.'}
                 </p>
+
+                <label className="route-select-label compact">
+                  Rute fragment
+                  <select
+                    value={fragment.route_name || 'Rute Utama'}
+                    onChange={(event) =>
+                      onUpdateFragmentRoute(fragment.id, event.target.value)
+                    }
+                  >
+                    {routeNames.map((routeName) => (
+                      <option key={routeName} value={routeName}>
+                        {routeName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
                 <div className="character-picker">
                   <button
@@ -966,7 +1053,7 @@ function TimelinePlot({
                     className="small-button"
                     onClick={() => moveFragment(fragment.id, 'down')}
                     disabled={
-                      index === storyFragments.length - 1 ||
+                      index === filteredFragments.length - 1 ||
                       busyFragmentId === fragment.id
                     }
                   >
@@ -990,6 +1077,179 @@ function TimelinePlot({
   )
 }
 
+function ComicVersion({
+  comicPages,
+  comicPanels,
+  comicSaveStatus,
+  onAddComicPage,
+  onDeleteComicPage,
+  onMoveComicPage,
+  onUpdateComicPage,
+  onAddComicPanel,
+  onDeleteComicPanel,
+  onMoveComicPanel,
+  onUpdateComicPanel,
+}) {
+  const [expandedPageId, setExpandedPageId] = useState(null)
+
+  function getPanelsForPage(pageId) {
+    return comicPanels
+      .filter((panel) => panel.comic_page_id === pageId)
+      .sort((a, b) => (a.panel_number ?? 0) - (b.panel_number ?? 0))
+  }
+
+  return (
+    <div className="comic-version">
+      <div className="comic-toolbar">
+        <h3>Halaman komik</h3>
+        <button type="button" onClick={onAddComicPage}>
+          + Halaman baru
+        </button>
+      </div>
+
+      {comicPages.length === 0 ? (
+        <p className="empty-state">Belum ada halaman komik.</p>
+      ) : (
+        <div className="comic-page-list">
+          {comicPages.map((page, pageIndex) => {
+            const isExpanded = expandedPageId === page.id
+            const panels = getPanelsForPage(page.id)
+
+            return (
+              <article className="comic-page-card" key={page.id}>
+                <button
+                  type="button"
+                  className="comic-page-summary"
+                  onClick={() =>
+                    setExpandedPageId((current) =>
+                      current === page.id ? null : page.id,
+                    )
+                  }
+                >
+                  <span>
+                    <strong>{page.title || `Halaman ${page.order_index}`}</strong>
+                    <small>{panels.length} panel</small>
+                  </span>
+                </button>
+
+                <div className="story-actions">
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => onMoveComicPage(page.id, 'up')}
+                    disabled={pageIndex === 0}
+                  >
+                    Atas
+                  </button>
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => onMoveComicPage(page.id, 'down')}
+                    disabled={pageIndex === comicPages.length - 1}
+                  >
+                    Bawah
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-button small-button"
+                    onClick={() => onDeleteComicPage(page.id)}
+                  >
+                    Hapus halaman
+                  </button>
+                </div>
+
+                {isExpanded && (
+                  <div className="comic-page-detail">
+                    <label>
+                      Ringkasan halaman
+                      <textarea
+                        value={page.summary || ''}
+                        onChange={(event) =>
+                          onUpdateComicPage(page.id, 'summary', event.target.value)
+                        }
+                        rows={4}
+                        placeholder="Ringkas isi halaman komik ini..."
+                      />
+                    </label>
+                    <p className="save-status">
+                      {comicSaveStatus[page.id] || 'Perubahan tersimpan otomatis'}
+                    </p>
+
+                    <div className="comic-panel-header">
+                      <h3>Panel</h3>
+                      <button type="button" onClick={() => onAddComicPanel(page.id)}>
+                        + Tambah panel
+                      </button>
+                    </div>
+
+                    {panels.length === 0 ? (
+                      <p className="empty-state">Belum ada panel.</p>
+                    ) : (
+                      <div className="comic-panel-list">
+                        {panels.map((panel, panelIndex) => (
+                          <article className="comic-panel-card" key={panel.id}>
+                            <div className="comic-panel-title">
+                              <strong>Panel {panel.panel_number}</strong>
+                              <div className="story-actions">
+                                <button
+                                  type="button"
+                                  className="small-button"
+                                  onClick={() =>
+                                    onMoveComicPanel(page.id, panel.id, 'up')
+                                  }
+                                  disabled={panelIndex === 0}
+                                >
+                                  Atas
+                                </button>
+                                <button
+                                  type="button"
+                                  className="small-button"
+                                  onClick={() =>
+                                    onMoveComicPanel(page.id, panel.id, 'down')
+                                  }
+                                  disabled={panelIndex === panels.length - 1}
+                                >
+                                  Bawah
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger-button small-button"
+                                  onClick={() => onDeleteComicPanel(panel.id)}
+                                >
+                                  Hapus
+                                </button>
+                              </div>
+                            </div>
+                            <textarea
+                              value={panel.description || ''}
+                              onChange={(event) =>
+                                onUpdateComicPanel(
+                                  panel.id,
+                                  event.target.value,
+                                )
+                              }
+                              rows={3}
+                              placeholder="Keterangan panel, angle, aksi, dialog..."
+                            />
+                            <p className="save-status">
+                              {comicSaveStatus[panel.id] ||
+                                'Perubahan tersimpan otomatis'}
+                            </p>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StoryBoard({
   characters,
   storyFragments,
@@ -1002,11 +1262,23 @@ function StoryBoard({
   onAttachFragmentCharacter,
   onDetachFragmentCharacter,
   onMoveFragment,
+  onUpdateFragmentRoute,
   onSelectChapter,
   onAddChapter,
   onDeleteChapter,
   onMoveChapter,
   onUpdateChapter,
+  comicPages,
+  comicPanels,
+  comicSaveStatus,
+  onAddComicPage,
+  onDeleteComicPage,
+  onMoveComicPage,
+  onUpdateComicPage,
+  onAddComicPanel,
+  onDeleteComicPanel,
+  onMoveComicPanel,
+  onUpdateComicPanel,
 }) {
   const [activeStoryTab, setActiveStoryTab] = useState('full')
 
@@ -1070,13 +1342,24 @@ function StoryBoard({
           onAttachFragmentCharacter={onAttachFragmentCharacter}
           onDetachFragmentCharacter={onDetachFragmentCharacter}
           onMoveFragment={onMoveFragment}
+          onUpdateFragmentRoute={onUpdateFragmentRoute}
         />
       )}
 
       {activeStoryTab === 'komik' && (
-        <div className="coming-soon">
-          <p>Segera hadir</p>
-        </div>
+        <ComicVersion
+          comicPages={comicPages}
+          comicPanels={comicPanels}
+          comicSaveStatus={comicSaveStatus}
+          onAddComicPage={onAddComicPage}
+          onDeleteComicPage={onDeleteComicPage}
+          onMoveComicPage={onMoveComicPage}
+          onUpdateComicPage={onUpdateComicPage}
+          onAddComicPanel={onAddComicPanel}
+          onDeleteComicPanel={onDeleteComicPanel}
+          onMoveComicPanel={onMoveComicPanel}
+          onUpdateComicPanel={onUpdateComicPanel}
+        />
       )}
     </section>
   )
@@ -1089,17 +1372,21 @@ function App() {
   const [storyFragments, setStoryFragments] = useState([])
   const [fragmentCharacters, setFragmentCharacters] = useState([])
   const [storyChapters, setStoryChapters] = useState([])
+  const [comicPages, setComicPages] = useState([])
+  const [comicPanels, setComicPanels] = useState([])
   const [selectedChapterIds, setSelectedChapterIds] = useState({
     full: null,
     ringkasan: null,
   })
   const [chapterSaveStatus, setChapterSaveStatus] = useState({})
+  const [comicSaveStatus, setComicSaveStatus] = useState({})
   const [activeTab, setActiveTab] = useState('inbox')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [saveStatus, setSaveStatus] = useState({})
   const saveTimers = useRef(new Map())
   const chapterSaveTimers = useRef(new Map())
+  const comicSaveTimers = useRef(new Map())
 
   const loadCharacters = useCallback(async () => {
     const { data, error } = await supabase
@@ -1185,6 +1472,34 @@ function App() {
     setStoryChapters(data || [])
   }, [])
 
+  const loadComicPages = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('comic_pages')
+      .select('*')
+      .order('order_index', { ascending: true })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setComicPages(data || [])
+  }, [])
+
+  const loadComicPanels = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('comic_panels')
+      .select('*')
+      .order('panel_number', { ascending: true })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setComicPanels(data || [])
+  }, [])
+
   const loadData = useCallback(async () => {
     await Promise.all([
       loadCharacters(),
@@ -1193,6 +1508,8 @@ function App() {
       loadStoryFragments(),
       loadFragmentCharacters(),
       loadStoryChapters(),
+      loadComicPages(),
+      loadComicPanels(),
     ])
     setIsLoading(false)
   }, [
@@ -1202,6 +1519,8 @@ function App() {
     loadStoryFragments,
     loadFragmentCharacters,
     loadStoryChapters,
+    loadComicPages,
+    loadComicPanels,
   ])
 
   useEffect(() => {
@@ -1215,10 +1534,12 @@ function App() {
   useEffect(() => {
     const timers = saveTimers.current
     const chapterTimers = chapterSaveTimers.current
+    const comicTimers = comicSaveTimers.current
 
     return () => {
       timers.forEach((timer) => clearTimeout(timer))
       chapterTimers.forEach((timer) => clearTimeout(timer))
+      comicTimers.forEach((timer) => clearTimeout(timer))
     }
   }, [])
 
@@ -1329,11 +1650,14 @@ function App() {
 
   async function addFragment(fragment) {
     const { characterIds, ...fragmentFields } = fragment
+    const routeName = fragmentFields.route_name || 'Rute Utama'
     const nextOrderIndex =
-      storyFragments.reduce(
-        (highest, item) => Math.max(highest, item.order_index ?? 0),
-        0,
-      ) + 1
+      storyFragments
+        .filter((item) => (item.route_name || 'Rute Utama') === routeName)
+        .reduce(
+          (highest, item) => Math.max(highest, item.order_index ?? 0),
+          0,
+        ) + 1
 
     const { data, error } = await supabase
       .from('story_fragments')
@@ -1415,11 +1739,14 @@ function App() {
     await loadFragmentCharacters()
   }
 
-  async function moveFragment(fragmentId, direction) {
-    const currentIndex = storyFragments.findIndex((item) => item.id === fragmentId)
+  async function moveFragment(fragmentId, direction, routeName = 'Rute Utama') {
+    const scopedFragments = storyFragments.filter(
+      (item) => (item.route_name || 'Rute Utama') === routeName,
+    )
+    const currentIndex = scopedFragments.findIndex((item) => item.id === fragmentId)
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-    const currentFragment = storyFragments[currentIndex]
-    const targetFragment = storyFragments[targetIndex]
+    const currentFragment = scopedFragments[currentIndex]
+    const targetFragment = scopedFragments[targetIndex]
 
     if (!currentFragment || !targetFragment) return
 
@@ -1440,6 +1767,31 @@ function App() {
 
     if (targetError) {
       setErrorMessage(targetError.message)
+      return
+    }
+
+    await loadStoryFragments()
+  }
+
+  async function updateFragmentRoute(fragmentId, routeName) {
+    const nextOrderIndex =
+      storyFragments
+        .filter((item) => (item.route_name || 'Rute Utama') === routeName)
+        .reduce(
+          (highest, item) => Math.max(highest, item.order_index ?? 0),
+          0,
+        ) + 1
+
+    const { error } = await supabase
+      .from('story_fragments')
+      .update({
+        route_name: routeName,
+        order_index: nextOrderIndex,
+      })
+      .eq('id', fragmentId)
+
+    if (error) {
+      setErrorMessage(error.message)
       return
     }
 
@@ -1607,6 +1959,234 @@ function App() {
     chapterSaveTimers.current.set(chapter.id, timer)
   }
 
+  async function addComicPage() {
+    const nextOrderIndex =
+      comicPages.reduce(
+        (highest, page) => Math.max(highest, page.order_index ?? 0),
+        0,
+      ) + 1
+
+    const { data, error } = await supabase
+      .from('comic_pages')
+      .insert({
+        title: `Halaman ${nextOrderIndex}`,
+        summary: '',
+        order_index: nextOrderIndex,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setComicPages((current) => [...current, data])
+  }
+
+  async function deleteComicPage(id) {
+    const { error } = await supabase.from('comic_pages').delete().eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await Promise.all([loadComicPages(), loadComicPanels()])
+  }
+
+  async function moveComicPage(id, direction) {
+    const currentIndex = comicPages.findIndex((page) => page.id === id)
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    const currentPage = comicPages[currentIndex]
+    const targetPage = comicPages[targetIndex]
+
+    if (!currentPage || !targetPage) return
+
+    const { error: currentError } = await supabase
+      .from('comic_pages')
+      .update({ order_index: targetPage.order_index })
+      .eq('id', currentPage.id)
+
+    if (currentError) {
+      setErrorMessage(currentError.message)
+      return
+    }
+
+    const { error: targetError } = await supabase
+      .from('comic_pages')
+      .update({ order_index: currentPage.order_index })
+      .eq('id', targetPage.id)
+
+    if (targetError) {
+      setErrorMessage(targetError.message)
+      return
+    }
+
+    await loadComicPages()
+  }
+
+  function updateComicPage(id, field, value) {
+    const page = comicPages.find((item) => item.id === id)
+    if (!page) return
+
+    const updatedPage = { ...page, [field]: value }
+    setComicPages((current) =>
+      current.map((item) => (item.id === id ? updatedPage : item)),
+    )
+    scheduleComicPageSave(updatedPage)
+  }
+
+  function scheduleComicPageSave(page) {
+    const key = `page-${page.id}`
+    const currentTimer = comicSaveTimers.current.get(key)
+    if (currentTimer) clearTimeout(currentTimer)
+
+    setComicSaveStatus((current) => ({
+      ...current,
+      [page.id]: 'Menunggu auto-save...',
+    }))
+
+    const timer = setTimeout(async () => {
+      setComicSaveStatus((current) => ({
+        ...current,
+        [page.id]: 'Menyimpan...',
+      }))
+
+      const { error } = await supabase
+        .from('comic_pages')
+        .update({
+          title: page.title,
+          summary: page.summary,
+        })
+        .eq('id', page.id)
+
+      setComicSaveStatus((current) => ({
+        ...current,
+        [page.id]: error ? 'Gagal menyimpan' : 'Tersimpan',
+      }))
+
+      if (error) setErrorMessage(error.message)
+    }, 800)
+
+    comicSaveTimers.current.set(key, timer)
+  }
+
+  async function addComicPanel(pageId) {
+    const nextPanelNumber =
+      comicPanels
+        .filter((panel) => panel.comic_page_id === pageId)
+        .reduce(
+          (highest, panel) => Math.max(highest, panel.panel_number ?? 0),
+          0,
+        ) + 1
+
+    const { data, error } = await supabase
+      .from('comic_panels')
+      .insert({
+        comic_page_id: pageId,
+        panel_number: nextPanelNumber,
+        description: '',
+      })
+      .select()
+      .single()
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setComicPanels((current) => [...current, data])
+  }
+
+  async function deleteComicPanel(id) {
+    const { error } = await supabase.from('comic_panels').delete().eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await loadComicPanels()
+  }
+
+  async function moveComicPanel(pageId, id, direction) {
+    const panels = comicPanels
+      .filter((panel) => panel.comic_page_id === pageId)
+      .sort((a, b) => (a.panel_number ?? 0) - (b.panel_number ?? 0))
+    const currentIndex = panels.findIndex((panel) => panel.id === id)
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    const currentPanel = panels[currentIndex]
+    const targetPanel = panels[targetIndex]
+
+    if (!currentPanel || !targetPanel) return
+
+    const { error: currentError } = await supabase
+      .from('comic_panels')
+      .update({ panel_number: targetPanel.panel_number })
+      .eq('id', currentPanel.id)
+
+    if (currentError) {
+      setErrorMessage(currentError.message)
+      return
+    }
+
+    const { error: targetError } = await supabase
+      .from('comic_panels')
+      .update({ panel_number: currentPanel.panel_number })
+      .eq('id', targetPanel.id)
+
+    if (targetError) {
+      setErrorMessage(targetError.message)
+      return
+    }
+
+    await loadComicPanels()
+  }
+
+  function updateComicPanel(id, description) {
+    const panel = comicPanels.find((item) => item.id === id)
+    if (!panel) return
+
+    const updatedPanel = { ...panel, description }
+    setComicPanels((current) =>
+      current.map((item) => (item.id === id ? updatedPanel : item)),
+    )
+    scheduleComicPanelSave(updatedPanel)
+  }
+
+  function scheduleComicPanelSave(panel) {
+    const key = `panel-${panel.id}`
+    const currentTimer = comicSaveTimers.current.get(key)
+    if (currentTimer) clearTimeout(currentTimer)
+
+    setComicSaveStatus((current) => ({
+      ...current,
+      [panel.id]: 'Menunggu auto-save...',
+    }))
+
+    const timer = setTimeout(async () => {
+      setComicSaveStatus((current) => ({
+        ...current,
+        [panel.id]: 'Menyimpan...',
+      }))
+
+      const { error } = await supabase
+        .from('comic_panels')
+        .update({ description: panel.description })
+        .eq('id', panel.id)
+
+      setComicSaveStatus((current) => ({
+        ...current,
+        [panel.id]: error ? 'Gagal menyimpan' : 'Tersimpan',
+      }))
+
+      if (error) setErrorMessage(error.message)
+    }, 800)
+
+    comicSaveTimers.current.set(key, timer)
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -1688,16 +2268,28 @@ function App() {
               storyChapters={storyChapters}
               selectedChapterIds={selectedChapterIds}
               chapterSaveStatus={chapterSaveStatus}
+              comicPages={comicPages}
+              comicPanels={comicPanels}
+              comicSaveStatus={comicSaveStatus}
               onAddFragment={addFragment}
               onDeleteFragment={deleteFragment}
               onAttachFragmentCharacter={attachFragmentCharacter}
               onDetachFragmentCharacter={detachFragmentCharacter}
               onMoveFragment={moveFragment}
+              onUpdateFragmentRoute={updateFragmentRoute}
               onSelectChapter={selectChapter}
               onAddChapter={addChapter}
               onDeleteChapter={deleteChapter}
               onMoveChapter={moveChapter}
               onUpdateChapter={updateChapter}
+              onAddComicPage={addComicPage}
+              onDeleteComicPage={deleteComicPage}
+              onMoveComicPage={moveComicPage}
+              onUpdateComicPage={updateComicPage}
+              onAddComicPanel={addComicPanel}
+              onDeleteComicPanel={deleteComicPanel}
+              onMoveComicPanel={moveComicPanel}
+              onUpdateComicPanel={updateComicPanel}
             />
           )}
         </>
