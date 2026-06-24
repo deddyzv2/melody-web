@@ -661,6 +661,26 @@ textarea {
   gap: 16px;
 }
 
+.character-board-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.sort-control {
+  display: grid;
+  min-width: 190px;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.sort-control select {
+  min-height: 40px;
+}
+
 .character-card {
   overflow: hidden;
 }

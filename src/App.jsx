@@ -294,8 +294,26 @@ function CharacterBoard({
   onUpdateCharacter,
   onUnlinkInboxItem,
   saveStatus,
+  sortMode,
+  onSortModeChange,
 }) {
   const [selectedCharacterKey, setSelectedCharacterKey] = useState(null)
+  const sortedCharacters = useMemo(() => {
+    return [...characters].sort((firstCharacter, secondCharacter) => {
+      if (sortMode === 'name') {
+        return getCharacterDisplayName(firstCharacter).localeCompare(
+          getCharacterDisplayName(secondCharacter),
+          'id',
+          { sensitivity: 'base' },
+        )
+      }
+
+      return (
+        new Date(secondCharacter.created_at || 0).getTime() -
+        new Date(firstCharacter.created_at || 0).getTime()
+      )
+    })
+  }, [characters, sortMode])
   const selectedCharacter = characters.find((character, index) => {
     const characterKey = character.id || `character-${index}`
     return characterKey === selectedCharacterKey
@@ -311,9 +329,21 @@ function CharacterBoard({
           <h2>Character Board</h2>
           <p>Bangun daftar karakter dan lengkapi detailnya sedikit demi sedikit.</p>
         </div>
-        <button type="button" onClick={onAddCharacter}>
-          Tambah karakter baru
-        </button>
+        <div className="character-board-actions">
+          <label className="sort-control">
+            Urutkan
+            <select
+              value={sortMode}
+              onChange={(event) => onSortModeChange(event.target.value)}
+            >
+              <option value="name">Nama (A-Z)</option>
+              <option value="newest">Terbaru ditambahkan</option>
+            </select>
+          </label>
+          <button type="button" onClick={onAddCharacter}>
+            Tambah karakter baru
+          </button>
+        </div>
       </div>
 
       {characters.length === 0 ? (
@@ -321,7 +351,7 @@ function CharacterBoard({
       ) : (
         <>
           <div className="character-grid">
-            {characters.map((character, index) => {
+            {sortedCharacters.map((character, index) => {
               const characterKey = character.id || `character-${index}`
               const isSelected = selectedCharacterKey === characterKey
               const incomplete = isCharacterIncomplete(character)
@@ -1865,6 +1895,7 @@ function App() {
   const [chapterSaveStatus, setChapterSaveStatus] = useState({})
   const [comicSaveStatus, setComicSaveStatus] = useState({})
   const [activeTab, setActiveTab] = useState('inbox')
+  const [characterSortMode, setCharacterSortMode] = useState('newest')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [saveStatus, setSaveStatus] = useState({})
@@ -2847,6 +2878,8 @@ function App() {
               onUpdateCharacter={updateCharacterField}
               onUnlinkInboxItem={unlinkInboxItem}
               saveStatus={saveStatus}
+              sortMode={characterSortMode}
+              onSortModeChange={setCharacterSortMode}
             />
           )}
 
