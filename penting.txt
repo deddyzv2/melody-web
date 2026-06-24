@@ -1,0 +1,10 @@
+cd /d D:\WebApp\MelodyWeb
+git add .
+git commit -m "update sort"
+git push
+
+
+DeddyMelody2026DB
+
+
+supabase db dump --db-url "postgresql://postgres:Deddyz123_DB_Melodydb.rigsnqzmdbzuwaaxmxkd.supabase.co:5432/postgres" -f backup-melody.sql

@@ -1,4 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { EditorContent, useEditor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import TextAlign from '@tiptap/extension-text-align'
+import Underline from '@tiptap/extension-underline'
+import DOMPurify from 'dompurify'
+import {
+  AlignmentType,
+  Document,
+  HeadingLevel,
+  Packer,
+  Paragraph,
+  TextRun,
+} from 'docx'
 import ReactFlow, {
   Background,
   BaseEdge,
@@ -41,6 +54,23 @@ const storySubTabs = [
 const deleteConfirmationMessage =
   'Yakin ingin menghapus ini? Tindakan ini tidak bisa dibatalkan.'
 
+const allowedTextAlignments = new Set(['left', 'center', 'right', 'justify'])
+
+DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+  if (data.attrName !== 'style') return
+
+  const textAlignMatch = String(data.attrValue || '').match(
+    /text-align\s*:\s*(left|center|right|justify)/i,
+  )
+
+  if (textAlignMatch) {
+    data.attrValue = `text-align: ${textAlignMatch[1].toLowerCase()}`
+    return
+  }
+
+  data.keepAttr = false
+})
+
 function confirmDelete() {
   return window.confirm(deleteConfirmationMessage)
 }
@@ -52,6 +82,279 @@ function formatDate(value) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+function escapeHtml(value) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function plainTextToHtml(value) {
+  const paragraphs = value
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trimEnd())
+    .filter(Boolean)
+
+  if (paragraphs.length === 0) return '<p></p>'
+
+  return paragraphs
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
+function sanitizeRichText(value) {
+  if (!value) return '<p></p>'
+
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(value)
+  const html = looksLikeHtml ? value : plainTextToHtml(value)
+
+  return DOMPurify.sanitize(html, {
+    ADD_ATTR: ['style'],
+    USE_PROFILES: { html: true },
+  })
+}
+
+function sanitizeFileName(value) {
+  const baseName = value
+    .trim()
+    .toLowerCase()
+    .replace(/[<>:"/\\|?*]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  return baseName || 'chapter'
+}
+
+function getChapterTypeSlug(type) {
+  return type === 'ringkasan' ? 'ringkasan' : 'cerita-full'
+}
+
+function getChapterExportBaseName(chapter, type) {
+  return `${sanitizeFileName(chapter?.title || 'chapter')}-${getChapterTypeSlug(type)}`
+}
+
+function getSanitizedDocumentBody(content) {
+  const template = document.createElement('template')
+  template.innerHTML = sanitizeRichText(content)
+  return template.content
+}
+
+function htmlToPlainText(content) {
+  const body = getSanitizedDocumentBody(content)
+  const lines = []
+
+  function inlineText(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent || ''
+    if (node.nodeName === 'BR') return '\n'
+
+    return Array.from(node.childNodes).map(inlineText).join('')
+  }
+
+  function walk(node, orderedIndex = null) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim()
+      if (text) lines.push(text)
+      return
+    }
+
+    const tagName = node.nodeName.toLowerCase()
+
+    if (tagName === 'ul') {
+      Array.from(node.children).forEach((child) => walk(child))
+      lines.push('')
+      return
+    }
+
+    if (tagName === 'ol') {
+      Array.from(node.children).forEach((child, index) => walk(child, index + 1))
+      lines.push('')
+      return
+    }
+
+    if (tagName === 'li') {
+      const prefix = orderedIndex ? `${orderedIndex}. ` : '- '
+      lines.push(`${prefix}${inlineText(node).trim()}`)
+      return
+    }
+
+    const text = inlineText(node).trim()
+    if (text) lines.push(text)
+    if (['p', 'h1', 'h2', 'h3', 'blockquote', 'div'].includes(tagName)) {
+      lines.push('')
+    }
+  }
+
+  Array.from(body.childNodes).forEach((node) => walk(node))
+
+  return lines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function exportToTxt(chapter, type) {
+  const title = chapter?.title?.trim() || 'Chapter tanpa judul'
+  const body = htmlToPlainText(chapter?.content || '')
+  const text = body ? `${title}\n\n${body}` : title
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+
+  downloadBlob(blob, `${getChapterExportBaseName(chapter, type)}.txt`)
+}
+
+function getNodeTextAlignment(node) {
+  const alignment = node?.style?.textAlign?.toLowerCase()
+  return allowedTextAlignments.has(alignment) ? alignment : undefined
+}
+
+function getDocxAlignment(node) {
+  const alignment =
+    getNodeTextAlignment(node) ||
+    getNodeTextAlignment(node?.querySelector?.('p,h1,h2,h3'))
+
+  if (alignment === 'center') return AlignmentType.CENTER
+  if (alignment === 'right') return AlignmentType.RIGHT
+  if (alignment === 'justify') return AlignmentType.JUSTIFIED
+
+  return undefined
+}
+
+function createDocxRuns(nodes, marks = {}) {
+  return Array.from(nodes).flatMap((node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent
+        ? [
+            new TextRun({
+              text: node.textContent,
+              bold: marks.bold,
+              italics: marks.italics,
+              underline: marks.underline ? {} : undefined,
+              strike: marks.strike,
+            }),
+          ]
+        : []
+    }
+
+    if (node.nodeName === 'BR') return [new TextRun({ break: 1 })]
+
+    const tagName = node.nodeName.toLowerCase()
+    const nextMarks = {
+      ...marks,
+      bold: marks.bold || tagName === 'strong' || tagName === 'b',
+      italics: marks.italics || tagName === 'em' || tagName === 'i',
+      underline: marks.underline || tagName === 'u',
+      strike: marks.strike || tagName === 's' || tagName === 'strike',
+    }
+
+    return createDocxRuns(node.childNodes, nextMarks)
+  })
+}
+
+function htmlToDocxParagraphs(content) {
+  const body = getSanitizedDocumentBody(content)
+  const paragraphs = []
+
+  function addParagraphFromNode(node, options = {}) {
+    const children = createDocxRuns(node.childNodes)
+    paragraphs.push(
+      new Paragraph({
+        alignment: getDocxAlignment(node),
+        ...options,
+        children: children.length > 0 ? children : [new TextRun('')],
+      }),
+    )
+  }
+
+  Array.from(body.childNodes).forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim()
+      if (text) paragraphs.push(new Paragraph({ children: [new TextRun(text)] }))
+      return
+    }
+
+    const tagName = node.nodeName.toLowerCase()
+
+    if (tagName === 'h1' || tagName === 'h2') {
+      addParagraphFromNode(node, { heading: HeadingLevel.HEADING_2 })
+      return
+    }
+
+    if (tagName === 'h3') {
+      addParagraphFromNode(node, { heading: HeadingLevel.HEADING_3 })
+      return
+    }
+
+    if (tagName === 'blockquote') {
+      const children = createDocxRuns(node.childNodes, { italics: true })
+      paragraphs.push(
+        new Paragraph({
+          alignment: getDocxAlignment(node),
+          children: children.length > 0 ? children : [new TextRun('')],
+          indent: { left: 360 },
+        }),
+      )
+      return
+    }
+
+    if (tagName === 'ul' || tagName === 'ol') {
+      Array.from(node.children).forEach((child, index) => {
+        if (child.nodeName.toLowerCase() !== 'li') return
+
+        const prefix = tagName === 'ol' ? `${index + 1}. ` : '- '
+        paragraphs.push(
+          new Paragraph({
+            alignment: getDocxAlignment(child) || getDocxAlignment(node),
+            children: [
+              new TextRun(prefix),
+              ...createDocxRuns(child.childNodes),
+            ],
+          }),
+        )
+      })
+      return
+    }
+
+    addParagraphFromNode(node)
+  })
+
+  return paragraphs
+}
+
+async function exportToDocx(chapter, type) {
+  const title = chapter?.title?.trim() || 'Chapter tanpa judul'
+  const contentParagraphs = htmlToDocxParagraphs(chapter?.content || '')
+  const document = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            text: title,
+            heading: HeadingLevel.TITLE,
+          }),
+          new Paragraph(''),
+          ...contentParagraphs,
+        ],
+      },
+    ],
+  })
+  const blob = await Packer.toBlob(document)
+
+  downloadBlob(blob, `${getChapterExportBaseName(chapter, type)}.docx`)
 }
 
 function isCharacterIncomplete(character) {
@@ -586,6 +889,149 @@ function RelationshipEdge({
 const relationshipNodeTypes = { relationshipNode: RelationshipNode }
 const relationshipEdgeTypes = { relationshipEdge: RelationshipEdge }
 
+function RichTextEditor({ value, onChange, placeholder }) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [2, 3],
+        },
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+        alignments: ['left', 'center', 'right', 'justify'],
+      }),
+      Underline,
+    ],
+    content: sanitizeRichText(value),
+    editorProps: {
+      attributes: {
+        class: 'rich-text-content',
+        'data-placeholder': placeholder,
+      },
+    },
+    onUpdate({ editor: currentEditor }) {
+      onChange(sanitizeRichText(currentEditor.getHTML()))
+    },
+  })
+
+  useEffect(() => {
+    if (!editor) return
+
+    const nextContent = sanitizeRichText(value)
+    if (editor.getHTML() !== nextContent) {
+      editor.commands.setContent(nextContent, false)
+    }
+  }, [editor, value])
+
+  if (!editor) return null
+
+  return (
+    <div className="rich-text-editor">
+      <div className="rich-text-toolbar" aria-label="Toolbar format teks">
+        <button
+          type="button"
+          className={editor.isActive('bold') ? 'active' : ''}
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          aria-label="Bold"
+        >
+          B
+        </button>
+        <button
+          type="button"
+          className={editor.isActive('italic') ? 'active' : ''}
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          aria-label="Italic"
+        >
+          I
+        </button>
+        <button
+          type="button"
+          className={editor.isActive('underline') ? 'active' : ''}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          aria-label="Underline"
+        >
+          U
+        </button>
+        <button
+          type="button"
+          className={editor.isActive('strike') ? 'active' : ''}
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+          aria-label="Strikethrough"
+        >
+          S
+        </button>
+        <button
+          type="button"
+          className={editor.isActive('heading', { level: 2 }) ? 'active' : ''}
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          aria-label="Heading"
+        >
+          H
+        </button>
+        <button
+          type="button"
+          className={editor.isActive('bulletList') ? 'active' : ''}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          aria-label="Bullet list"
+        >
+          Bullets
+        </button>
+        <button
+          type="button"
+          className={editor.isActive('orderedList') ? 'active' : ''}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          aria-label="Numbered list"
+        >
+          1. List
+        </button>
+        <button
+          type="button"
+          className={editor.isActive('blockquote') ? 'active' : ''}
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          aria-label="Blockquote"
+        >
+          Quote
+        </button>
+        <span className="toolbar-divider" aria-hidden="true" />
+        <button
+          type="button"
+          className={editor.isActive({ textAlign: 'left' }) ? 'active' : ''}
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+          aria-label="Align left"
+        >
+          Left
+        </button>
+        <button
+          type="button"
+          className={editor.isActive({ textAlign: 'center' }) ? 'active' : ''}
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+          aria-label="Align center"
+        >
+          Center
+        </button>
+        <button
+          type="button"
+          className={editor.isActive({ textAlign: 'right' }) ? 'active' : ''}
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          aria-label="Align right"
+        >
+          Right
+        </button>
+        <button
+          type="button"
+          className={editor.isActive({ textAlign: 'justify' }) ? 'active' : ''}
+          onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+          aria-label="Align justify"
+        >
+          Justify
+        </button>
+      </div>
+      <EditorContent editor={editor} />
+    </div>
+  )
+}
+
 function RelationshipMap({
   characters,
   relationships,
@@ -1041,6 +1487,11 @@ function ChapterEditor({
   onMoveChapter,
   onUpdateChapter,
 }) {
+  const [exportStatus, setExportStatus] = useState({
+    chapterId: null,
+    type: null,
+    message: '',
+  })
   const filteredChapters = chapters
     .filter((chapter) => chapter.type === type)
     .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
@@ -1058,6 +1509,51 @@ function ChapterEditor({
     if (!value) return 'Belum tersimpan'
 
     return `Tersimpan terakhir ${formatDate(value)}`
+  }
+
+  const currentExportStatus =
+    exportStatus.chapterId === selectedChapter?.id && exportStatus.type === type
+      ? exportStatus.message
+      : ''
+
+  function handleExportTxt() {
+    if (!selectedChapter) return
+
+    try {
+      exportToTxt(selectedChapter, type)
+      setExportStatus({
+        chapterId: selectedChapter.id,
+        type,
+        message: 'TXT berhasil diexport',
+      })
+    } catch (error) {
+      console.error('TXT export failed', error)
+      setExportStatus({
+        chapterId: selectedChapter.id,
+        type,
+        message: 'Gagal export TXT',
+      })
+    }
+  }
+
+  async function handleExportDocx() {
+    if (!selectedChapter) return
+
+    try {
+      await exportToDocx(selectedChapter, type)
+      setExportStatus({
+        chapterId: selectedChapter.id,
+        type,
+        message: 'DOCX berhasil diexport',
+      })
+    } catch (error) {
+      console.error('DOCX export failed', error)
+      setExportStatus({
+        chapterId: selectedChapter.id,
+        type,
+        message: 'Gagal export DOCX',
+      })
+    }
   }
 
   return (
@@ -1119,24 +1615,44 @@ function ChapterEditor({
       <section className="chapter-editor">
         {selectedChapter ? (
           <>
-            <input
-              value={selectedChapter.title || ''}
-              onChange={(event) =>
-                onUpdateChapter(selectedChapter.id, 'title', event.target.value)
-              }
-              placeholder="Judul chapter"
-            />
-            <textarea
+            <div className="chapter-editor-header">
+              <input
+                value={selectedChapter.title || ''}
+                onChange={(event) =>
+                  onUpdateChapter(selectedChapter.id, 'title', event.target.value)
+                }
+                placeholder="Judul chapter"
+              />
+              <div className="chapter-export-actions">
+                <button
+                  type="button"
+                  className="small-button"
+                  onClick={handleExportTxt}
+                  disabled={!selectedChapter}
+                >
+                  Export TXT
+                </button>
+                <button
+                  type="button"
+                  className="small-button"
+                  onClick={handleExportDocx}
+                  disabled={!selectedChapter}
+                >
+                  Export DOCX
+                </button>
+              </div>
+            </div>
+            <RichTextEditor
               value={selectedChapter.content || ''}
-              onChange={(event) =>
-                onUpdateChapter(selectedChapter.id, 'content', event.target.value)
+              onChange={(content) =>
+                onUpdateChapter(selectedChapter.id, 'content', content)
               }
               placeholder="Tulis cerita di sini..."
-              rows={18}
             />
             <p className="save-status">
               {saveStatus[selectedChapter.id] ||
                 formatSavedAt(selectedChapter.updated_at)}
+              {currentExportStatus ? ` · ${currentExportStatus}` : ''}
             </p>
           </>
         ) : (
