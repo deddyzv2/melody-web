@@ -1665,7 +1665,7 @@ function ChapterEditor({
 
 function StoryNode({ data }) {
   return (
-    <div className="story-flow-node">
+    <div className={`story-flow-node${data.isSelected ? ' selected' : ''}`}>
       <Handle className="story-flow-handle" type="target" position={Position.Left} />
       <button
         type="button"
@@ -1767,6 +1767,7 @@ function TimelinePlot({
         },
         data: {
           title: fragment.title,
+          isSelected: selectedFragmentId === fragment.id,
           onSelect: () => {
             setSelectedFragmentId(fragment.id)
             setSelectedConnectionId(null)
@@ -1775,7 +1776,7 @@ function TimelinePlot({
         },
       })),
     )
-  }, [onAddChildFragment, setNodes, storyFragments])
+  }, [onAddChildFragment, selectedFragmentId, setNodes, storyFragments])
 
   useEffect(() => {
     setEdges(
@@ -2304,30 +2305,25 @@ function StoryBoard({
   onDeleteComicPanel,
   onMoveComicPanel,
   onUpdateComicPanel,
+  activeStoryTab,
+  onActiveStoryTabChange,
 }) {
-  const [activeStoryTab, setActiveStoryTab] = useState('full')
-
   return (
     <section className="panel storyboard-panel">
-      <div className="section-heading">
-        <div>
-          <h2>Rak Cerita</h2>
-          <p>Simpan versi panjang, ringkasan, plot, dan naskah komik di satu rak.</p>
-        </div>
+      <div className="subtab-group">
+        <nav className="story-subtabs" aria-label="Navigasi Rak Cerita">
+          {storySubTabs.map((tab) => (
+            <button
+              type="button"
+              className={activeStoryTab === tab.id ? 'active' : ''}
+              key={tab.id}
+              onClick={() => onActiveStoryTabChange(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
       </div>
-
-      <nav className="story-subtabs" aria-label="Navigasi Rak Cerita">
-        {storySubTabs.map((tab) => (
-          <button
-            type="button"
-            className={activeStoryTab === tab.id ? 'active' : ''}
-            key={tab.id}
-            onClick={() => setActiveStoryTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
 
       {activeStoryTab === 'full' && (
         <ChapterEditor
@@ -2411,6 +2407,7 @@ function App() {
   const [chapterSaveStatus, setChapterSaveStatus] = useState({})
   const [comicSaveStatus, setComicSaveStatus] = useState({})
   const [activeTab, setActiveTab] = useState('inbox')
+  const [activeStoryTab, setActiveStoryTab] = useState('full')
   const [characterSortMode, setCharacterSortMode] = useState('newest')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
@@ -3444,6 +3441,8 @@ function App() {
               onDeleteComicPanel={deleteComicPanel}
               onMoveComicPanel={moveComicPanel}
               onUpdateComicPanel={updateComicPanel}
+              activeStoryTab={activeStoryTab}
+              onActiveStoryTabChange={setActiveStoryTab}
             />
           )}
         </>
