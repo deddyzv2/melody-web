@@ -13,6 +13,7 @@ const navigationTabs = [
   { id: 'inbox', label: 'Inbox' },
   { id: 'characters', label: 'Character Board' },
   { id: 'relationships', label: 'Relationship Map' },
+  { id: 'story', label: 'Loose Story Board' },
 ]
 
 function formatDate(value) {
@@ -31,7 +32,7 @@ function isCharacterIncomplete(character) {
 }
 
 function getCharacterDisplayName(character) {
-  return character?.name?.trim() || 'Karakter tanpa nama'
+  return character?.name?.trim() || '(belum diberi nama)'
 }
 
 function buildCircularLayout(characters) {
@@ -530,10 +531,256 @@ function RelationshipMap({
   )
 }
 
+function StoryBoard({
+  characters,
+  storyFragments,
+  fragmentCharacters,
+  onAddFragment,
+  onDeleteFragment,
+  onAttachFragmentCharacter,
+  onDetachFragmentCharacter,
+  onMoveFragment,
+}) {
+  const [title, setTitle] = useState('')
+  const [content, setContent] = useState('')
+  const [expandedId, setExpandedId] = useState(null)
+  const [openPickerId, setOpenPickerId] = useState(null)
+  const [busyFragmentId, setBusyFragmentId] = useState(null)
+  const boardRef = useRef(null)
+
+  useEffect(() => {
+    function closePickerOnOutsideClick(event) {
+      if (!boardRef.current?.contains(event.target)) {
+        setOpenPickerId(null)
+      }
+    }
+
+    document.addEventListener('pointerdown', closePickerOnOutsideClick)
+
+    return () => {
+      document.removeEventListener('pointerdown', closePickerOnOutsideClick)
+    }
+  }, [])
+
+  async function submitFragment(event) {
+    event.preventDefault()
+
+    if (!title.trim() && !content.trim()) return
+
+    await onAddFragment({
+      title: title.trim() || 'Potongan tanpa judul',
+      content: content.trim(),
+    })
+
+    setTitle('')
+    setContent('')
+  }
+
+  function getLinkedCharacterIds(fragmentId) {
+    return fragmentCharacters
+      .filter((item) => item.fragment_id === fragmentId)
+      .map((item) => item.character_id)
+  }
+
+  function getCharacterName(id) {
+    const character = characters.find((item) => item.id === id)
+    return getCharacterDisplayName(character)
+  }
+
+  async function toggleFragmentCharacter(fragmentId, characterId, isChecked) {
+    setBusyFragmentId(fragmentId)
+
+    if (isChecked) {
+      await onAttachFragmentCharacter(fragmentId, characterId)
+    } else {
+      await onDetachFragmentCharacter(fragmentId, characterId)
+    }
+
+    setBusyFragmentId(null)
+  }
+
+  async function moveFragment(fragmentId, direction) {
+    setBusyFragmentId(fragmentId)
+    await onMoveFragment(fragmentId, direction)
+    setBusyFragmentId(null)
+  }
+
+  async function deleteFragment(fragmentId) {
+    setBusyFragmentId(fragmentId)
+    await onDeleteFragment(fragmentId)
+    setBusyFragmentId(null)
+  }
+
+  return (
+    <section className="panel storyboard-panel" ref={boardRef}>
+      <div className="section-heading">
+        <div>
+          <h2>Loose Story Board</h2>
+          <p>Susun potongan cerita bebas sebelum dirapikan menjadi alur final.</p>
+        </div>
+      </div>
+
+      <form className="story-form" onSubmit={submitFragment}>
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Judul"
+        />
+        <textarea
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder="Isi/catatan"
+          rows={4}
+        />
+        <button type="submit" disabled={!title.trim() && !content.trim()}>
+          Tambah
+        </button>
+      </form>
+
+      {storyFragments.length === 0 ? (
+        <p className="empty-state">Belum ada potongan cerita.</p>
+      ) : (
+        <div className="story-list">
+          {storyFragments.map((fragment, index) => {
+            const linkedCharacterIds = getLinkedCharacterIds(fragment.id)
+            const isExpanded = expandedId === fragment.id
+            const visibleContent =
+              isExpanded || fragment.content.length <= 180
+                ? fragment.content
+                : `${fragment.content.slice(0, 180)}...`
+
+            return (
+              <article className="story-card" key={fragment.id}>
+                <button
+                  type="button"
+                  className="story-summary"
+                  onClick={() =>
+                    setExpandedId((current) =>
+                      current === fragment.id ? null : fragment.id,
+                    )
+                  }
+                >
+                  <span>
+                    <strong>{fragment.title || 'Potongan tanpa judul'}</strong>
+                    <small>Urutan {fragment.order_index}</small>
+                  </span>
+                </button>
+
+                <p className="story-content">
+                  {visibleContent || 'Belum ada isi/catatan.'}
+                </p>
+
+                <div className="character-picker">
+                  <button
+                    type="button"
+                    className="character-picker-trigger"
+                    onClick={() =>
+                      setOpenPickerId((current) =>
+                        current === fragment.id ? null : fragment.id,
+                      )
+                    }
+                  >
+                    {linkedCharacterIds.length === 0
+                      ? '+ Pilih karakter'
+                      : `${linkedCharacterIds.length} karakter terpilih`}
+                  </button>
+
+                  {openPickerId === fragment.id && (
+                    <div className="checkbox-popover">
+                      {characters.length === 0 ? (
+                        <p className="empty-state">
+                          Belum ada karakter untuk dipilih.
+                        </p>
+                      ) : (
+                        <div className="checkbox-list">
+                          {characters.map((character) => {
+                            const isChecked = linkedCharacterIds.includes(
+                              character.id,
+                            )
+
+                            return (
+                              <label
+                                className="checkbox-option"
+                                key={character.id}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(event) =>
+                                    toggleFragmentCharacter(
+                                      fragment.id,
+                                      character.id,
+                                      event.target.checked,
+                                    )
+                                  }
+                                  disabled={busyFragmentId === fragment.id}
+                                />
+                                <span>{getCharacterDisplayName(character)}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="fragment-badges">
+                    {linkedCharacterIds.length === 0 ? (
+                      <span className="muted-badge">Belum ada karakter</span>
+                    ) : (
+                      linkedCharacterIds.map((characterId) => (
+                        <span className="character-badge" key={characterId}>
+                          {getCharacterName(characterId)}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="story-actions">
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => moveFragment(fragment.id, 'up')}
+                    disabled={index === 0 || busyFragmentId === fragment.id}
+                  >
+                    Atas
+                  </button>
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => moveFragment(fragment.id, 'down')}
+                    disabled={
+                      index === storyFragments.length - 1 ||
+                      busyFragmentId === fragment.id
+                    }
+                  >
+                    Bawah
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-button small-button"
+                    onClick={() => deleteFragment(fragment.id)}
+                    disabled={busyFragmentId === fragment.id}
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function App() {
   const [characters, setCharacters] = useState([])
   const [inboxItems, setInboxItems] = useState([])
   const [relationships, setRelationships] = useState([])
+  const [storyFragments, setStoryFragments] = useState([])
+  const [fragmentCharacters, setFragmentCharacters] = useState([])
   const [activeTab, setActiveTab] = useState('inbox')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
@@ -582,10 +829,50 @@ function App() {
     setRelationships(data || [])
   }, [])
 
+  const loadStoryFragments = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('story_fragments')
+      .select('*')
+      .order('order_index', { ascending: true })
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setStoryFragments(data || [])
+  }, [])
+
+  const loadFragmentCharacters = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('fragment_characters')
+      .select('*')
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setFragmentCharacters(data || [])
+  }, [])
+
   const loadData = useCallback(async () => {
-    await Promise.all([loadCharacters(), loadInboxItems(), loadRelationships()])
+    await Promise.all([
+      loadCharacters(),
+      loadInboxItems(),
+      loadRelationships(),
+      loadStoryFragments(),
+      loadFragmentCharacters(),
+    ])
     setIsLoading(false)
-  }, [loadCharacters, loadInboxItems, loadRelationships])
+  }, [
+    loadCharacters,
+    loadInboxItems,
+    loadRelationships,
+    loadStoryFragments,
+    loadFragmentCharacters,
+  ])
 
   useEffect(() => {
     const initialLoad = setTimeout(() => {
@@ -708,6 +995,104 @@ function App() {
     await loadRelationships()
   }
 
+  async function addFragment(fragment) {
+    const nextOrderIndex =
+      storyFragments.reduce(
+        (highest, item) => Math.max(highest, item.order_index ?? 0),
+        0,
+      ) + 1
+
+    const { error } = await supabase.from('story_fragments').insert({
+      ...fragment,
+      order_index: nextOrderIndex,
+    })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await loadStoryFragments()
+  }
+
+  async function deleteFragment(id) {
+    const { error } = await supabase.from('story_fragments').delete().eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await Promise.all([loadStoryFragments(), loadFragmentCharacters()])
+  }
+
+  async function attachFragmentCharacter(fragmentId, characterId) {
+    const alreadyLinked = fragmentCharacters.some(
+      (item) =>
+        item.fragment_id === fragmentId && item.character_id === characterId,
+    )
+
+    if (alreadyLinked) return
+
+    const { error } = await supabase.from('fragment_characters').insert({
+      fragment_id: fragmentId,
+      character_id: characterId,
+    })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await loadFragmentCharacters()
+  }
+
+  async function detachFragmentCharacter(fragmentId, characterId) {
+    const { error } = await supabase
+      .from('fragment_characters')
+      .delete()
+      .eq('fragment_id', fragmentId)
+      .eq('character_id', characterId)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    await loadFragmentCharacters()
+  }
+
+  async function moveFragment(fragmentId, direction) {
+    const currentIndex = storyFragments.findIndex((item) => item.id === fragmentId)
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    const currentFragment = storyFragments[currentIndex]
+    const targetFragment = storyFragments[targetIndex]
+
+    if (!currentFragment || !targetFragment) return
+
+    const { error: currentError } = await supabase
+      .from('story_fragments')
+      .update({ order_index: targetFragment.order_index })
+      .eq('id', currentFragment.id)
+
+    if (currentError) {
+      setErrorMessage(currentError.message)
+      return
+    }
+
+    const { error: targetError } = await supabase
+      .from('story_fragments')
+      .update({ order_index: currentFragment.order_index })
+      .eq('id', targetFragment.id)
+
+    if (targetError) {
+      setErrorMessage(targetError.message)
+      return
+    }
+
+    await loadStoryFragments()
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -778,6 +1163,19 @@ function App() {
               relationships={relationships}
               onAddRelationship={addRelationship}
               onDeleteRelationship={deleteRelationship}
+            />
+          )}
+
+          {activeTab === 'story' && (
+            <StoryBoard
+              characters={characters}
+              storyFragments={storyFragments}
+              fragmentCharacters={fragmentCharacters}
+              onAddFragment={addFragment}
+              onDeleteFragment={deleteFragment}
+              onAttachFragmentCharacter={attachFragmentCharacter}
+              onDetachFragmentCharacter={detachFragmentCharacter}
+              onMoveFragment={moveFragment}
             />
           )}
         </>

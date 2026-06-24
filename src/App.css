@@ -85,6 +85,16 @@
   font-weight: 600;
 }
 
+.storyboard-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.story-form {
+  display: grid;
+  gap: 10px;
+}
+
 .item-list {
   display: grid;
   gap: 12px;
@@ -287,6 +297,133 @@
   font-size: 13px;
   font-weight: 700;
   pointer-events: none;
+}
+
+.story-list {
+  display: grid;
+  gap: 14px;
+}
+
+.story-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #d9dee8;
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 14px;
+}
+
+.story-summary {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.story-summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.story-summary strong {
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+
+.story-summary small {
+  color: #6b7280;
+}
+
+.story-content {
+  white-space: pre-wrap;
+}
+
+.fragment-badges,
+.story-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.character-picker {
+  position: relative;
+  display: grid;
+  gap: 10px;
+}
+
+.character-picker-trigger {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 34px;
+  border-color: #cfd6e3;
+  background: #ffffff;
+  color: #111827;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.checkbox-popover {
+  position: absolute;
+  z-index: 20;
+  top: 42px;
+  left: 0;
+  width: min(420px, 100%);
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #cfd6e3;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow:
+    rgba(15, 23, 42, 0.12) 0 18px 30px -12px,
+    rgba(15, 23, 42, 0.08) 0 8px 16px -8px;
+  padding: 10px;
+}
+
+.checkbox-list {
+  display: grid;
+  gap: 8px;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border: 1px solid #d9dee8;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #111827;
+  padding: 8px 10px;
+}
+
+.checkbox-option input {
+  width: auto;
+  min-height: 0;
+}
+
+.checkbox-option span {
+  overflow-wrap: anywhere;
+}
+
+.character-badge,
+.muted-badge {
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 4px 8px;
+}
+
+.character-badge {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.muted-badge {
+  background: #eef2f7;
+  color: #64748b;
 }
 
 .error-banner {
