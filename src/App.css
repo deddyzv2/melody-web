@@ -728,7 +728,7 @@ textarea {
 }
 
 .relationship-canvas {
-  min-height: 380px;
+  min-height: 430px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: #f8fbff;
@@ -736,27 +736,175 @@ textarea {
 }
 
 .relationship-line {
-  stroke: #8ea9d2;
-  stroke-width: 2.5;
+  stroke: #7fa0d0;
+  stroke-width: 2.4;
+  opacity: 0.9;
 }
 
 .relationship-label-bg {
-  fill: #ffffff;
-  stroke: #cfe0f5;
+  display: none;
 }
 
 .relationship-label {
-  fill: #405d8c;
-  font-weight: 700;
+  fill: #33598d;
+  font-size: 11px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.88);
+  stroke-linejoin: round;
+  stroke-width: 4px;
 }
 
 .relationship-node rect {
   fill: #5d83c7;
   stroke: #4d73b6;
+  stroke-width: 2;
 }
 
 .relationship-node text {
   font-weight: 800;
+}
+
+.relationship-node.isolated rect {
+  fill: #f8fbff;
+  stroke: #9cb8e0;
+  stroke-dasharray: 6 4;
+  stroke-width: 2.5;
+}
+
+.relationship-node.isolated text {
+  fill: #4b6286;
+}
+
+.isolated-divider {
+  stroke: #d8e6f8;
+  stroke-dasharray: 6 8;
+  stroke-width: 2;
+}
+
+.isolated-label {
+  fill: #6b7487;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.relationship-flow-canvas {
+  position: relative;
+  height: 520px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #f8fbff;
+  box-shadow:
+    inset 0 0 0 10px rgba(229, 242, 255, 0.48),
+    0 16px 34px rgba(90, 117, 162, 0.12);
+}
+
+.relationship-flow-canvas .react-flow {
+  background: transparent;
+}
+
+.relationship-flow-node {
+  display: grid;
+  min-width: 168px;
+  min-height: 66px;
+  place-items: center;
+  border: 2px solid #4d73b6;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #6f94d4, #557dc1);
+  box-shadow: 0 14px 26px rgba(80, 113, 171, 0.22);
+  color: #ffffff;
+  cursor: grab;
+  padding: 10px 16px;
+  text-align: center;
+}
+
+.relationship-flow-node:active {
+  cursor: grabbing;
+}
+
+.relationship-flow-node.isolated {
+  border-color: #9cb8e0;
+  border-style: dashed;
+  background: rgba(248, 251, 255, 0.96);
+  box-shadow: 0 10px 22px rgba(103, 133, 180, 0.13);
+  color: #4b6286;
+}
+
+.relationship-flow-node-name {
+  max-width: 138px;
+  overflow: hidden;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relationship-flow-node-note {
+  margin-top: 3px;
+  color: #6b7487;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.relationship-flow-handle {
+  width: 9px;
+  height: 9px;
+  border: 2px solid #ffffff;
+  background: #4f74b8;
+  opacity: 0.65;
+}
+
+.relationship-flow-edge-path {
+  stroke: #4f74b8;
+  stroke-linecap: round;
+  stroke-width: 2.5;
+}
+
+.relationship-flow-edge-label {
+  position: absolute;
+  max-width: 140px;
+  border: 1px solid rgba(207, 224, 245, 0.85);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 6px 14px rgba(82, 109, 158, 0.12);
+  color: #33598d;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.2;
+  padding: 3px 8px;
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.relationship-flow-canvas .react-flow__edge.selected .relationship-flow-edge-path,
+.relationship-flow-canvas .react-flow__edge:focus .relationship-flow-edge-path {
+  stroke: #274f93;
+  stroke-width: 3;
+}
+
+.relationship-flow-canvas .react-flow__controls,
+.relationship-flow-canvas .react-flow__minimap {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.relationship-flow-hint {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 5;
+  border: 1px dashed #9cb8e0;
+  border-radius: 999px;
+  background: rgba(248, 251, 255, 0.9);
+  color: #6b7487;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 12px;
+  pointer-events: none;
 }
 
 .story-summary {

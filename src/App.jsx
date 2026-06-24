@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
   MiniMap,
@@ -54,32 +56,86 @@ function getCharacterDisplayName(character) {
   return character?.name?.trim() || '(belum diberi nama)'
 }
 
-function buildCircularLayout(characters) {
-  const centerX = 360
-  const centerY = 220
-  const radius = characters.length <= 2 ? 130 : 160
+function buildRelationshipLayout(characters, relationships) {
+  const connectedIds = new Set()
 
-  if (characters.length === 1) {
-    return {
-      [characters[0].id]: {
-        x: centerX,
-        y: centerY,
-        name: getCharacterDisplayName(characters[0]),
-      },
-    }
+  relationships.forEach((relationship) => {
+    connectedIds.add(relationship.character_a)
+    connectedIds.add(relationship.character_b)
+  })
+
+  const connectedCharacters = characters.filter((character) =>
+    connectedIds.has(character.id),
+  )
+  const isolatedCharacters = characters.filter(
+    (character) => !connectedIds.has(character.id),
+  )
+  const positions = {}
+  const isPositionSaved = (character) =>
+    character.position_x !== null &&
+    character.position_x !== undefined &&
+    character.position_y !== null &&
+    character.position_y !== undefined
+
+  function placeGrid(items, bounds, isolated = false) {
+    if (items.length === 0) return
+
+    const columns = Math.min(
+      items.length,
+      Math.max(1, Math.ceil(Math.sqrt(items.length))),
+    )
+    const rows = Math.ceil(items.length / columns)
+    const columnGap =
+      columns === 1 ? 0 : (bounds.maxX - bounds.minX) / (columns - 1)
+    const rowGap = rows === 1 ? 0 : (bounds.maxY - bounds.minY) / (rows - 1)
+
+    items.forEach((character, index) => {
+      const column = index % columns
+      const row = Math.floor(index / columns)
+      const singleColumnX = (bounds.minX + bounds.maxX) / 2
+      const singleRowY = (bounds.minY + bounds.maxY) / 2
+
+      positions[character.id] = {
+        x: columns === 1 ? singleColumnX : bounds.minX + column * columnGap,
+        y: rows === 1 ? singleRowY : bounds.minY + row * rowGap,
+        name: getCharacterDisplayName(character),
+        isolated,
+      }
+    })
   }
 
-  return characters.reduce((positions, character, index) => {
-    const angle = (index / characters.length) * Math.PI * 2 - Math.PI / 2
+  characters.forEach((character) => {
+    if (!isPositionSaved(character)) return
 
     positions[character.id] = {
-      x: centerX + Math.cos(angle) * radius,
-      y: centerY + Math.sin(angle) * radius,
+      x: Number(character.position_x),
+      y: Number(character.position_y),
       name: getCharacterDisplayName(character),
+      isolated: !connectedIds.has(character.id),
     }
+  })
 
-    return positions
-  }, {})
+  if (connectedCharacters.length > 0) {
+    placeGrid(
+      connectedCharacters.filter((character) => !positions[character.id]),
+      isolatedCharacters.length > 0
+        ? { minX: 120, maxX: 600, minY: 88, maxY: 270 }
+        : { minX: 120, maxX: 600, minY: 110, maxY: 350 },
+    )
+  }
+
+  placeGrid(
+    isolatedCharacters.filter((character) => !positions[character.id]),
+    connectedCharacters.length > 0
+      ? { minX: 120, maxX: 600, minY: 382, maxY: 438 }
+      : { minX: 120, maxX: 600, minY: 145, maxY: 340 },
+    true,
+  )
+
+  return {
+    hasIsolatedCharacters: isolatedCharacters.length > 0,
+    positions,
+  }
 }
 
 function Inbox({ characters, inboxItems, onRefresh, onError }) {
@@ -385,17 +441,176 @@ function CharacterBoard({
   )
 }
 
+function RelationshipNode({ data }) {
+  return (
+    <div
+      className={`relationship-flow-node${data.isolated ? ' isolated' : ''}`}
+      title={data.isolated ? 'Belum ada relasi' : undefined}
+    >
+      <Handle
+        className="relationship-flow-handle"
+        type="target"
+        position={Position.Left}
+      />
+      <div className="relationship-flow-node-name">{data.name}</div>
+      {data.isolated && (
+        <div className="relationship-flow-node-note">Belum ada relasi</div>
+      )}
+      <Handle
+        className="relationship-flow-handle"
+        type="source"
+        position={Position.Right}
+      />
+    </div>
+  )
+}
+
+function RelationshipEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  markerEnd,
+  data,
+}) {
+  const offset = data?.offset || 0
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const length = Math.hypot(dx, dy) || 1
+  const normalX = -dy / length
+  const normalY = dx / length
+  const midX = (sourceX + targetX) / 2
+  const midY = (sourceY + targetY) / 2
+  const controlX = midX + normalX * offset
+  const controlY = midY + normalY * offset
+  const edgePath = `M ${sourceX},${sourceY} Q ${controlX},${controlY} ${targetX},${targetY}`
+  const labelX = 0.25 * sourceX + 0.5 * controlX + 0.25 * targetX
+  const labelY = 0.25 * sourceY + 0.5 * controlY + 0.25 * targetY
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        className="relationship-flow-edge-path"
+      />
+      <EdgeLabelRenderer>
+        <div
+          className="relationship-flow-edge-label"
+          style={{
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+          }}
+        >
+          {data?.label || 'relasi'}
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  )
+}
+
+const relationshipNodeTypes = { relationshipNode: RelationshipNode }
+const relationshipEdgeTypes = { relationshipEdge: RelationshipEdge }
+
 function RelationshipMap({
   characters,
   relationships,
   onAddRelationship,
   onDeleteRelationship,
+  onUpdateCharacterPosition,
 }) {
   const [characterA, setCharacterA] = useState('')
   const [characterB, setCharacterB] = useState('')
   const [relationType, setRelationType] = useState('')
   const [busyRelationshipId, setBusyRelationshipId] = useState(null)
-  const positions = buildCircularLayout(characters)
+  const { hasIsolatedCharacters, positions } = useMemo(
+    () => buildRelationshipLayout(characters, relationships),
+    [characters, relationships],
+  )
+  const [nodes, setNodes, onNodesChange] = useNodesState([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const positionSaveTimers = useRef(new Map())
+
+  useEffect(() => {
+    const timers = positionSaveTimers.current
+
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer))
+    }
+  }, [])
+
+  useEffect(() => {
+    setNodes(
+      characters.map((character) => {
+        const position = positions[character.id]
+
+        return {
+          id: character.id,
+          type: 'relationshipNode',
+          position: {
+            x: position?.x ?? 120,
+            y: position?.y ?? 120,
+          },
+          data: {
+            name: getCharacterDisplayName(character),
+            isolated: position?.isolated ?? true,
+          },
+        }
+      }),
+    )
+  }, [characters, positions, setNodes])
+
+  useEffect(() => {
+    const groupedRelationships = relationships.reduce((groups, relationship) => {
+      const pairKey = [relationship.character_a, relationship.character_b]
+        .sort()
+        .join('::')
+      const currentGroup = groups.get(pairKey) || []
+
+      currentGroup.push(relationship)
+      groups.set(pairKey, currentGroup)
+
+      return groups
+    }, new Map())
+
+    const offsetById = new Map()
+
+    groupedRelationships.forEach((group) => {
+      const middleIndex = (group.length - 1) / 2
+
+      group.forEach((relationship, index) => {
+        const baseOffset = group.length === 1 ? 0 : (index - middleIndex) * 56
+        const canonicalSource =
+          [relationship.character_a, relationship.character_b].sort()[0] ===
+          relationship.character_a
+
+        offsetById.set(
+          relationship.id,
+          canonicalSource ? baseOffset : -baseOffset,
+        )
+      })
+    })
+
+    setEdges(
+      relationships.map((relationship) => ({
+        id: relationship.id,
+        source: relationship.character_a,
+        target: relationship.character_b,
+        type: 'relationshipEdge',
+        data: {
+          label: relationship.relation_type || 'relasi',
+          offset: offsetById.get(relationship.id) || 0,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: '#4f74b8',
+          height: 18,
+          width: 18,
+        },
+      })),
+    )
+  }, [relationships, setEdges])
 
   function getCharacterName(id) {
     const character = characters.find((item) => item.id === id)
@@ -424,6 +639,17 @@ function RelationshipMap({
     setBusyRelationshipId(null)
   }
 
+  function moveCharacterNodeEnd(_event, node) {
+    const currentTimer = positionSaveTimers.current.get(node.id)
+    if (currentTimer) clearTimeout(currentTimer)
+
+    const timer = setTimeout(() => {
+      onUpdateCharacterPosition(node.id, node.position.x, node.position.y)
+    }, 300)
+
+    positionSaveTimers.current.set(node.id, timer)
+  }
+
   return (
     <section className="panel relationship-panel">
       <div className="section-heading">
@@ -435,7 +661,7 @@ function RelationshipMap({
 
       <form className="relationship-form" onSubmit={submitRelationship}>
         <label>
-          Karakter A
+          Dari karakter
           <select
             value={characterA}
             onChange={(event) => setCharacterA(event.target.value)}
@@ -449,7 +675,7 @@ function RelationshipMap({
           </select>
         </label>
         <label>
-          Karakter B
+          Ke karakter
           <select
             value={characterB}
             onChange={(event) => setCharacterB(event.target.value)}
@@ -490,8 +716,8 @@ function RelationshipMap({
           relationships.map((relationship) => (
             <article className="relationship-row" key={relationship.id}>
               <span>
-                {getCharacterName(relationship.character_a)} -{' '}
-                {relationship.relation_type || 'relasi'} -{' '}
+                {getCharacterName(relationship.character_a)} {'\u2192'}{' '}
+                {relationship.relation_type || 'relasi'} {'\u2192'}{' '}
                 {getCharacterName(relationship.character_b)}
               </span>
               <button
@@ -512,63 +738,34 @@ function RelationshipMap({
         {characters.length === 0 ? (
           <p className="empty-state">Tambahkan karakter untuk mulai membuat peta.</p>
         ) : (
-          <svg className="relationship-canvas" viewBox="0 0 720 440" role="img">
-            <title>Peta relasi karakter</title>
-            {relationships.map((relationship) => {
-              const source = positions[relationship.character_a]
-              const target = positions[relationship.character_b]
-              if (!source || !target) return null
-
-              const labelX = (source.x + target.x) / 2
-              const labelY = (source.y + target.y) / 2
-
-              return (
-                <g key={relationship.id}>
-                  <line
-                    className="relationship-line"
-                    x1={source.x}
-                    y1={source.y}
-                    x2={target.x}
-                    y2={target.y}
-                  />
-                  <rect
-                    className="relationship-label-bg"
-                    x={labelX - 52}
-                    y={labelY - 15}
-                    width="104"
-                    height="30"
-                    rx="6"
-                  />
-                  <text
-                    className="relationship-label"
-                    x={labelX}
-                    y={labelY + 4}
-                    textAnchor="middle"
-                  >
-                    {relationship.relation_type || 'relasi'}
-                  </text>
-                </g>
-              )
-            })}
-            {characters.map((character) => {
-              const position = positions[character.id]
-
-              return (
-                <g className="relationship-node" key={character.id}>
-                  <rect
-                    x={position.x - 72}
-                    y={position.y - 26}
-                    width="144"
-                    height="52"
-                    rx="10"
-                  />
-                  <text x={position.x} y={position.y + 5} textAnchor="middle">
-                    {position.name}
-                  </text>
-                </g>
-              )
-            })}
-          </svg>
+          <div className="relationship-flow-canvas">
+            {hasIsolatedCharacters && (
+              <div className="relationship-flow-hint">Belum ada relasi</div>
+            )}
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={relationshipNodeTypes}
+              edgeTypes={relationshipEdgeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeDragStop={moveCharacterNodeEnd}
+              fitView
+              fitViewOptions={{ padding: 0.2 }}
+              minZoom={0.45}
+              maxZoom={1.35}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background color="#d8e6f8" gap={24} />
+              <Controls />
+              <MiniMap
+                nodeColor={(node) =>
+                  node.data?.isolated ? '#eef6ff' : '#5d83c7'
+                }
+                maskColor="rgba(239, 246, 255, 0.68)"
+              />
+            </ReactFlow>
+          </div>
         )}
       </section>
     </section>
@@ -1690,6 +1887,28 @@ function App() {
     scheduleCharacterSave(updatedCharacter)
   }
 
+  async function updateCharacterPosition(id, x, y) {
+    setCharacters((current) =>
+      current.map((character) =>
+        character.id === id
+          ? { ...character, position_x: x, position_y: y }
+          : character,
+      ),
+    )
+
+    const { error } = await supabase
+      .from('characters')
+      .update({
+        position_x: x,
+        position_y: y,
+      })
+      .eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+    }
+  }
+
   async function unlinkInboxItem(itemId) {
     const { error } = await supabase
       .from('inbox_items')
@@ -2382,6 +2601,7 @@ function App() {
               relationships={relationships}
               onAddRelationship={addRelationship}
               onDeleteRelationship={deleteRelationship}
+              onUpdateCharacterPosition={updateCharacterPosition}
             />
           )}
 
