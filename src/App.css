@@ -17,6 +17,19 @@
   margin-bottom: 24px;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .eyebrow,
 .meta,
 .save-status {
@@ -1139,6 +1152,53 @@ textarea:focus {
   align-items: start;
 }
 
+.character-grid-scroll {
+  position: relative;
+  max-height: 214px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(#f8fbff 30%, rgba(248, 251, 255, 0)) top,
+    linear-gradient(rgba(248, 251, 255, 0), #f8fbff 70%) bottom,
+    radial-gradient(
+        farthest-side at 50% 0,
+        rgba(64, 93, 140, 0.22),
+        rgba(64, 93, 140, 0)
+      )
+      top,
+    radial-gradient(
+        farthest-side at 50% 100%,
+        rgba(64, 93, 140, 0.18),
+        rgba(64, 93, 140, 0)
+      )
+      bottom;
+  background-attachment: local, local, scroll, scroll;
+  background-color: #f8fbff;
+  background-repeat: no-repeat;
+  background-size:
+    100% 18px,
+    100% 18px,
+    100% 12px,
+    100% 12px;
+  padding: 10px;
+}
+
+.character-grid-scroll .character-grid {
+  padding: 2px;
+}
+
+.character-grid-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.character-grid-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid #f8fbff;
+  border-radius: 999px;
+  background: #9cb8e0;
+}
+
 .character-card {
   align-self: start;
   transition:
@@ -1228,6 +1288,10 @@ textarea:focus {
   .character-form-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .character-grid-scroll {
+    max-height: 236px;
   }
 }
 
@@ -1530,6 +1594,92 @@ textarea:focus {
   gap: 16px;
 }
 
+.timeline-chapter-switcher {
+  border: 1px solid #d8e6f8;
+  border-radius: 18px;
+  background: rgba(232, 241, 255, 0.66);
+  padding: 10px;
+}
+
+.timeline-chapter-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.timeline-chapter-pill {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid #cfe0f5;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.timeline-chapter-pill > button:first-child,
+.timeline-add-chapter {
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #7a8494;
+  font-size: 0.86rem;
+  font-weight: 800;
+  padding: 7px 13px;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.timeline-chapter-pill > button:first-child.active {
+  background: #5d83c7;
+  box-shadow: 0 8px 18px rgba(93, 131, 199, 0.26);
+  color: #ffffff;
+  font-weight: 950;
+}
+
+.chapter-mini-action {
+  min-height: 34px;
+  border: 0;
+  border-left: 1px solid #d8e6f8;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: none;
+  color: #6b7487;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 6px 9px;
+}
+
+.chapter-mini-action.danger {
+  color: #b45363;
+}
+
+.timeline-add-chapter {
+  border: 1px dashed #9cb8e0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.64);
+  color: #405d8c;
+}
+
+.timeline-chapter-edit {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid #cfe0f5;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 6px;
+}
+
+.timeline-chapter-edit input {
+  min-height: 32px;
+  min-width: 160px;
+}
+
 .story-flow-canvas {
   height: 560px;
   overflow: hidden;
@@ -1829,4 +1979,410 @@ textarea:focus {
     align-items: stretch;
     flex-direction: column;
   }
+}
+
+:root[data-theme='dark'] {
+  --ink: #d7e1ef;
+  --heading: #f3f7ff;
+  --muted: #93a4ba;
+  --surface: rgba(24, 35, 56, 0.9);
+  --surface-strong: #17243a;
+  --surface-soft: #111c2e;
+  --line: #2c4264;
+  --line-strong: #3b5a85;
+  --pink: #1c314f;
+  --pink-strong: #8fb8ff;
+  --button: #6f98df;
+  --button-hover: #86adf0;
+  --danger: #f0a8b8;
+  --danger-bg: #442332;
+  --mint: #1b304e;
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.32);
+  --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme='dark'] h1,
+:root[data-theme='dark'] h2,
+:root[data-theme='dark'] h3 {
+  color: var(--heading);
+}
+
+:root[data-theme='dark'] .app-header,
+:root[data-theme='dark'] .panel,
+:root[data-theme='dark'] .inbox-item,
+:root[data-theme='dark'] .character-card,
+:root[data-theme='dark'] .relationship-row,
+:root[data-theme='dark'] .story-card,
+:root[data-theme='dark'] .related-item,
+:root[data-theme='dark'] .chapter-sidebar,
+:root[data-theme='dark'] .chapter-editor,
+:root[data-theme='dark'] .coming-soon,
+:root[data-theme='dark'] .timeline-panel,
+:root[data-theme='dark'] .edge-action-bar,
+:root[data-theme='dark'] .fragment-detail-panel,
+:root[data-theme='dark'] .comic-page-card,
+:root[data-theme='dark'] .comic-panel-card {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .app-header {
+  background: rgba(24, 35, 56, 0.78);
+}
+
+:root[data-theme='dark'] .section-heading p,
+:root[data-theme='dark'] .card-summary small,
+:root[data-theme='dark'] .story-summary small,
+:root[data-theme='dark'] .meta,
+:root[data-theme='dark'] .save-status,
+:root[data-theme='dark'] .empty-state,
+:root[data-theme='dark'] .loading-state,
+:root[data-theme='dark'] .related-placeholder,
+:root[data-theme='dark'] .subtab-label {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] button,
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] textarea {
+  border-color: var(--line-strong);
+}
+
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] textarea {
+  background: #0f1a2c;
+  color: var(--heading);
+}
+
+:root[data-theme='dark'] button {
+  background: var(--button);
+  color: #07111f;
+}
+
+:root[data-theme='dark'] button:hover {
+  background: var(--button-hover);
+}
+
+:root[data-theme='dark'] button:disabled {
+  opacity: 0.5;
+}
+
+:root[data-theme='dark'] .danger-button {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+:root[data-theme='dark'] .small-button {
+  background: #213858;
+  color: #d9e8ff;
+}
+
+:root[data-theme='dark'] .main-tabs button,
+:root[data-theme='dark'] .story-subtabs button,
+:root[data-theme='dark'] .timeline-chapter-pill > button:first-child,
+:root[data-theme='dark'] .timeline-add-chapter,
+:root[data-theme='dark'] .character-picker-trigger {
+  border-color: var(--line);
+  background: rgba(22, 34, 55, 0.82);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .main-tabs button.active,
+:root[data-theme='dark'] .story-subtabs button.active,
+:root[data-theme='dark'] .timeline-chapter-pill > button:first-child.active {
+  border-color: rgba(143, 184, 255, 0.44);
+  background: var(--button);
+  box-shadow: 0 12px 24px rgba(77, 126, 211, 0.28);
+  color: #07111f;
+}
+
+:root[data-theme='dark'] .story-subtabs,
+:root[data-theme='dark'] .timeline-chapter-switcher,
+:root[data-theme='dark'] .character-grid-scroll {
+  border-color: var(--line);
+  background: rgba(14, 25, 42, 0.74);
+}
+
+:root[data-theme='dark'] .character-grid-scroll {
+  background:
+    linear-gradient(#111c2e 30%, rgba(17, 28, 46, 0)) top,
+    linear-gradient(rgba(17, 28, 46, 0), #111c2e 70%) bottom,
+    radial-gradient(
+        farthest-side at 50% 0,
+        rgba(143, 184, 255, 0.22),
+        rgba(143, 184, 255, 0)
+      )
+      top,
+    radial-gradient(
+        farthest-side at 50% 100%,
+        rgba(143, 184, 255, 0.18),
+        rgba(143, 184, 255, 0)
+      )
+      bottom;
+  background-attachment: local, local, scroll, scroll;
+  background-color: #111c2e;
+  background-repeat: no-repeat;
+  background-size:
+    100% 18px,
+    100% 18px,
+    100% 12px,
+    100% 12px;
+}
+
+:root[data-theme='dark'] .character-card.incomplete,
+:root[data-theme='dark'] .chapter-list-item,
+:root[data-theme='dark'] .comic-page-detail,
+:root[data-theme='dark'] .relationship-flow-node.isolated,
+:root[data-theme='dark'] .story-flow-node,
+:root[data-theme='dark'] .rich-text-editor,
+:root[data-theme='dark'] .rich-text-content,
+:root[data-theme='dark'] .checkbox-popover,
+:root[data-theme='dark'] .timeline-chapter-edit,
+:root[data-theme='dark'] .comic-panel-card {
+  border-color: var(--line);
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .character-card.selected,
+:root[data-theme='dark'] .chapter-list-item.active,
+:root[data-theme='dark'] .story-flow-node.selected {
+  border-color: #8fb8ff;
+  background: #1c314f;
+  box-shadow:
+    0 0 0 5px rgba(143, 184, 255, 0.14),
+    0 18px 34px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-theme='dark'] .card-summary strong,
+:root[data-theme='dark'] .story-summary strong,
+:root[data-theme='dark'] .story-flow-node-title,
+:root[data-theme='dark'] .chapter-title-button,
+:root[data-theme='dark'] .comic-page-summary strong,
+:root[data-theme='dark'] .comic-panel-title strong {
+  color: var(--heading);
+}
+
+:root[data-theme='dark'] .badge,
+:root[data-theme='dark'] .character-badge,
+:root[data-theme='dark'] .muted-badge {
+  border-color: var(--line-strong);
+  background: #213858;
+  color: #d9e8ff;
+}
+
+:root[data-theme='dark'] .relationship-flow-canvas,
+:root[data-theme='dark'] .story-flow-canvas,
+:root[data-theme='dark'] .relationship-canvas {
+  border-color: var(--line);
+  background: #0f1a2c;
+  box-shadow:
+    inset 0 0 0 10px rgba(31, 48, 76, 0.5),
+    var(--shadow-soft);
+}
+
+:root[data-theme='dark'] .relationship-flow-canvas .react-flow,
+:root[data-theme='dark'] .story-flow-canvas .react-flow {
+  background: linear-gradient(135deg, #101b2d, #16243a);
+}
+
+:root[data-theme='dark'] .relationship-flow-node {
+  border-color: #6f98df;
+  background: linear-gradient(180deg, #2d5794, #244473);
+  color: #f3f7ff;
+}
+
+:root[data-theme='dark'] .relationship-flow-edge-label,
+:root[data-theme='dark'] .story-flow-edge-label {
+  color: #d9e8ff;
+  fill: #d9e8ff;
+}
+
+:root[data-theme='dark'] .relationship-flow-edge-label {
+  border-color: var(--line);
+  background: rgba(18, 30, 50, 0.88);
+}
+
+:root[data-theme='dark'] .relationship-flow-edge-path,
+:root[data-theme='dark'] .story-flow-canvas .react-flow__edge-path {
+  stroke: #8fb8ff;
+}
+
+:root[data-theme='dark'] .rich-text-toolbar {
+  border-color: var(--line);
+  background: #111c2e;
+}
+
+:root[data-theme='dark'] .rich-text-toolbar button {
+  border-color: var(--line);
+  background: #17243a;
+  color: #c8d8ee;
+}
+
+:root[data-theme='dark'] .rich-text-toolbar button:hover,
+:root[data-theme='dark'] .rich-text-toolbar button.active {
+  background: #244473;
+  color: #f3f7ff;
+}
+
+:root[data-theme='dark'] .toolbar-divider {
+  background: var(--line);
+}
+
+:root[data-theme='dark'] .rich-text-content blockquote {
+  border-color: #6f98df;
+  color: #c8d8ee;
+}
+
+:root[data-theme='dark'] .react-flow__controls,
+:root[data-theme='dark'] .react-flow__minimap {
+  background: #17243a;
+  border-color: var(--line);
+}
+
+:root[data-theme='dark'] .react-flow__controls button {
+  background: #17243a;
+  color: #d9e8ff;
+  fill: #d9e8ff;
+}
+
+:root[data-theme='dark'] .story-flow-node {
+  border: 1px solid #34445f;
+  border-radius: 18px;
+  background: #18253a;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  color: #eef4ff;
+}
+
+:root[data-theme='dark'] .story-flow-node.selected {
+  border-color: #8fb8ff;
+  border-width: 3px;
+  background: #1d2d46;
+  box-shadow:
+    0 0 0 5px rgba(143, 184, 255, 0.14),
+    0 18px 34px rgba(0, 0, 0, 0.36);
+}
+
+:root[data-theme='dark'] .story-flow-node-title,
+:root[data-theme='dark'] .story-flow-node-title:hover {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #f3f7ff;
+  padding: 0;
+  transform: none;
+}
+
+:root[data-theme='dark'] .story-flow-add {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  border: 1px solid rgba(184, 207, 255, 0.72);
+  border-radius: 999px;
+  background: #6f98df;
+  box-shadow: 0 8px 18px rgba(61, 112, 197, 0.32);
+  color: #07111f;
+  padding: 0;
+}
+
+:root[data-theme='dark'] .story-flow-add:hover {
+  background: #86adf0;
+  transform: translateY(-1px);
+}
+
+:root[data-theme='dark'] .story-flow-handle {
+  border-color: #17243a;
+  background: #8fb8ff;
+}
+
+:root[data-theme='dark'] .character-card,
+:root[data-theme='dark'] .character-card.incomplete {
+  border: 1px solid #34445f;
+  background: #18253a;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+  color: #eef4ff;
+}
+
+:root[data-theme='dark'] .character-card.selected {
+  border-color: #8fb8ff;
+  background: #1d2d46;
+  box-shadow:
+    0 0 0 5px rgba(143, 184, 255, 0.13),
+    0 18px 34px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-theme='dark'] .card-summary,
+:root[data-theme='dark'] .card-summary:hover {
+  background: transparent;
+  box-shadow: none;
+  color: #eef4ff;
+  transform: none;
+}
+
+:root[data-theme='dark'] .card-summary strong {
+  color: #f3f7ff;
+}
+
+:root[data-theme='dark'] .card-summary small {
+  color: #c8d8ee;
+}
+
+:root[data-theme='dark'] .badge {
+  border-color: #4a6794;
+  background: #213858;
+  color: #e4efff;
+}
+
+:root[data-theme='dark'] .character-detail-panel,
+:root[data-theme='dark'] .character-form {
+  border-color: var(--line);
+  background: #17243a;
+  color: #eef4ff;
+}
+
+:root[data-theme='dark'] .character-form {
+  border-top-color: var(--line);
+}
+
+:root[data-theme='dark'] .character-form-header h3,
+:root[data-theme='dark'] .character-form label,
+:root[data-theme='dark'] .related-ideas h3 {
+  color: #e4efff;
+}
+
+:root[data-theme='dark'] .character-form input,
+:root[data-theme='dark'] .character-form textarea {
+  border-color: #3b5a85;
+  background: #0f1a2c;
+  color: #f3f7ff;
+}
+
+:root[data-theme='dark'] .character-form input::placeholder,
+:root[data-theme='dark'] .character-form textarea::placeholder {
+  color: #7f91aa;
+}
+
+:root[data-theme='dark'] .related-ideas {
+  border-top-color: var(--line);
+}
+
+:root[data-theme='dark'] .related-item {
+  border-color: var(--line);
+  background: #111c2e;
+}
+
+:root[data-theme='dark'] .related-item p {
+  color: #eef4ff;
+}
+
+:root[data-theme='dark'] .error-banner {
+  border-color: #5d2a3a;
+  background: #3a1e2b;
+  color: #ffd6df;
 }

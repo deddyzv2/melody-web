@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>melodyweb</title>
+    <script>
+      try {
+        const savedTheme = localStorage.getItem('melody-theme')
+        if (savedTheme === 'dark') {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      } catch {
+        // Keep the default light theme if localStorage is unavailable.
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

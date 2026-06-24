@@ -51,6 +51,8 @@ const storySubTabs = [
   { id: 'komik', label: 'Versi Komik' },
 ]
 
+const defaultTimelineChapter = 'Arc 1'
+
 const deleteConfirmationMessage =
   'Yakin ingin menghapus ini? Tindakan ini tidak bisa dibatalkan.'
 
@@ -653,35 +655,37 @@ function CharacterBoard({
         <p className="empty-state">Belum ada karakter.</p>
       ) : (
         <>
-          <div className="character-grid">
-            {sortedCharacters.map((character, index) => {
-              const characterKey = character.id || `character-${index}`
-              const isSelected = selectedCharacterKey === characterKey
-              const incomplete = isCharacterIncomplete(character)
+          <div className="character-grid-scroll">
+            <div className="character-grid">
+              {sortedCharacters.map((character, index) => {
+                const characterKey = character.id || `character-${index}`
+                const isSelected = selectedCharacterKey === characterKey
+                const incomplete = isCharacterIncomplete(character)
 
-              return (
-                <article
-                  className={`character-card ${incomplete ? 'incomplete' : ''} ${
-                    isSelected ? 'selected' : ''
-                  }`}
-                  key={characterKey}
-                >
-                  <button
-                    type="button"
-                    className="card-summary"
-                    onClick={() => setSelectedCharacterKey(characterKey)}
+                return (
+                  <article
+                    className={`character-card ${incomplete ? 'incomplete' : ''} ${
+                      isSelected ? 'selected' : ''
+                    }`}
+                    key={characterKey}
                   >
-                    <span>
-                      <strong>
-                        {character.name?.trim() || 'Karakter tanpa nama'}
-                      </strong>
-                      <small>{character.role?.trim() || 'Role belum diisi'}</small>
-                    </span>
-                    {incomplete && <span className="badge">Belum lengkap</span>}
-                  </button>
-                </article>
-              )
-            })}
+                    <button
+                      type="button"
+                      className="card-summary"
+                      onClick={() => setSelectedCharacterKey(characterKey)}
+                    >
+                      <span>
+                        <strong>
+                          {character.name?.trim() || 'Karakter tanpa nama'}
+                        </strong>
+                        <small>{character.role?.trim() || 'Role belum diisi'}</small>
+                      </span>
+                      {incomplete && <span className="badge">Belum lengkap</span>}
+                    </button>
+                  </article>
+                )
+              })}
+            </div>
           </div>
 
           <section className="character-detail-panel">
@@ -1710,9 +1714,20 @@ function TimelinePlot({
   onDeleteFragmentConnection,
   onUpdateFragmentPosition,
   onUpdateFragmentDetail,
+  onUpdateFragmentChapter,
+  timelineChapters,
+  activeTimelineChapter,
+  onActiveTimelineChapterChange,
+  onAddTimelineChapter,
+  onRenameTimelineChapter,
+  onDeleteTimelineChapter,
 }) {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [newChapterName, setNewChapterName] = useState('')
+  const [isAddingChapter, setIsAddingChapter] = useState(false)
+  const [renamingChapter, setRenamingChapter] = useState(null)
+  const [renameChapterName, setRenameChapterName] = useState('')
   const [selectedFragmentId, setSelectedFragmentId] = useState(null)
   const [selectedConnectionId, setSelectedConnectionId] = useState(null)
   const [selectedFormCharacterIds, setSelectedFormCharacterIds] = useState([])
@@ -1744,6 +1759,42 @@ function TimelinePlot({
   const selectedConnection = fragmentConnections.find(
     (connection) => connection.id === selectedConnectionId,
   )
+  const activeChapter = timelineChapters.includes(activeTimelineChapter)
+    ? activeTimelineChapter
+    : timelineChapters[0] || defaultTimelineChapter
+  const activeChapterFragments = useMemo(
+    () =>
+      storyFragments.filter(
+        (fragment) =>
+          (fragment.chapter || defaultTimelineChapter) === activeChapter,
+      ),
+    [activeChapter, storyFragments],
+  )
+  const activeChapterFragmentIds = useMemo(
+    () => new Set(activeChapterFragments.map((fragment) => fragment.id)),
+    [activeChapterFragments],
+  )
+  const activeChapterConnections = useMemo(
+    () =>
+      fragmentConnections.filter(
+        (connection) =>
+          activeChapterFragmentIds.has(connection.from_fragment_id) &&
+          activeChapterFragmentIds.has(connection.to_fragment_id),
+      ),
+    [activeChapterFragmentIds, fragmentConnections],
+  )
+  const visibleSelectedFragment =
+    selectedFragment &&
+    (selectedFragment.chapter || defaultTimelineChapter) === activeChapter
+      ? selectedFragment
+      : null
+  const visibleSelectedConnection =
+    selectedConnection &&
+    activeChapterConnections.some(
+      (connection) => connection.id === selectedConnection.id,
+    )
+      ? selectedConnection
+      : null
 
   function getLinkedCharacterIds(fragmentId) {
     return fragmentCharacters
@@ -1758,7 +1809,7 @@ function TimelinePlot({
 
   useEffect(() => {
     setNodes(
-      storyFragments.map((fragment, index) => ({
+      activeChapterFragments.map((fragment, index) => ({
         id: fragment.id,
         type: 'storyNode',
         position: {
@@ -1776,11 +1827,11 @@ function TimelinePlot({
         },
       })),
     )
-  }, [onAddChildFragment, selectedFragmentId, setNodes, storyFragments])
+  }, [activeChapterFragments, onAddChildFragment, selectedFragmentId, setNodes])
 
   useEffect(() => {
     setEdges(
-      fragmentConnections.map((connection) => ({
+      activeChapterConnections.map((connection) => ({
         id: connection.id,
         source: connection.from_fragment_id,
         target: connection.to_fragment_id,
@@ -1795,7 +1846,7 @@ function TimelinePlot({
         labelClassName: 'story-flow-edge-label',
       })),
     )
-  }, [fragmentConnections, setEdges])
+  }, [activeChapterConnections, setEdges])
 
   async function submitFragment(event) {
     event.preventDefault()
@@ -1807,6 +1858,7 @@ function TimelinePlot({
       content: content.trim(),
       position_x: 120,
       position_y: 120,
+      chapter: activeChapter,
       characterIds: selectedFormCharacterIds,
     })
 
@@ -1839,6 +1891,37 @@ function TimelinePlot({
     },
     [onAddFragmentConnection, setEdges],
   )
+
+  function submitNewChapter(event) {
+    event.preventDefault()
+
+    const trimmedName = newChapterName.trim()
+    if (!trimmedName) return
+
+    onAddTimelineChapter(trimmedName)
+    onActiveTimelineChapterChange(trimmedName)
+    setNewChapterName('')
+    setIsAddingChapter(false)
+  }
+
+  function startRenameChapter(chapter) {
+    setRenamingChapter(chapter)
+    setRenameChapterName(chapter)
+  }
+
+  async function submitRenameChapter(event) {
+    event.preventDefault()
+
+    const trimmedName = renameChapterName.trim()
+    if (!renamingChapter || !trimmedName) return
+
+    if (trimmedName !== renamingChapter) {
+      await onRenameTimelineChapter(renamingChapter, trimmedName)
+    }
+
+    setRenamingChapter(null)
+    setRenameChapterName('')
+  }
 
   async function moveNodeEnd(_event, node) {
     await onUpdateFragmentPosition(node.id, node.position.x, node.position.y)
@@ -1875,6 +1958,98 @@ function TimelinePlot({
 
   return (
     <div className="timeline-panel" ref={boardRef}>
+      <div className="timeline-chapter-switcher">
+        <div className="timeline-chapter-list" aria-label="Arc Timeline Plot">
+          {timelineChapters.map((chapter) =>
+            renamingChapter === chapter ? (
+              <form
+                className="timeline-chapter-edit"
+                key={chapter}
+                onSubmit={submitRenameChapter}
+              >
+                <input
+                  value={renameChapterName}
+                  onChange={(event) => setRenameChapterName(event.target.value)}
+                  autoFocus
+                />
+                <button type="submit" className="small-button">
+                  Simpan
+                </button>
+                <button
+                  type="button"
+                  className="small-button"
+                  onClick={() => setRenamingChapter(null)}
+                >
+                  Batal
+                </button>
+              </form>
+            ) : (
+              <div className="timeline-chapter-pill" key={chapter}>
+                <button
+                  type="button"
+                  className={activeChapter === chapter ? 'active' : ''}
+                  onClick={() => {
+                    onActiveTimelineChapterChange(chapter)
+                    setSelectedFragmentId(null)
+                    setSelectedConnectionId(null)
+                  }}
+                >
+                  {chapter}
+                </button>
+                <button
+                  type="button"
+                  className="chapter-mini-action"
+                  onClick={() => startRenameChapter(chapter)}
+                  aria-label={`Rename ${chapter}`}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="chapter-mini-action danger"
+                  onClick={() => onDeleteTimelineChapter(chapter)}
+                  aria-label={`Hapus ${chapter}`}
+                >
+                  Hapus
+                </button>
+              </div>
+            ),
+          )}
+
+          {isAddingChapter ? (
+            <form className="timeline-chapter-edit" onSubmit={submitNewChapter}>
+              <input
+                value={newChapterName}
+                onChange={(event) => setNewChapterName(event.target.value)}
+                placeholder="Nama arc"
+                autoFocus
+              />
+              <button type="submit" className="small-button">
+                Tambah
+              </button>
+              <button
+                type="button"
+                className="small-button"
+                onClick={() => {
+                  setIsAddingChapter(false)
+                  setNewChapterName('')
+                }}
+              >
+                Batal
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              className="timeline-add-chapter"
+              onClick={() => setIsAddingChapter(true)}
+            >
+              + Tambah arc
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="story-flow-canvas">
         <ReactFlow
           nodes={nodes}
@@ -1903,14 +2078,14 @@ function TimelinePlot({
         </ReactFlow>
       </div>
 
-      {selectedConnection && (
+      {visibleSelectedConnection && (
         <div className="edge-action-bar">
           <span>Panah terpilih</span>
           <button
             type="button"
             className="danger-button small-button"
             onClick={() => {
-              onDeleteFragmentConnection(selectedConnection.id)
+              onDeleteFragmentConnection(visibleSelectedConnection.id)
               setSelectedConnectionId(null)
             }}
           >
@@ -1920,24 +2095,24 @@ function TimelinePlot({
       )}
 
       <section className="fragment-detail-panel">
-        {selectedFragment ? (
+        {visibleSelectedFragment ? (
           <>
             <div className="fragment-detail-header">
               <h3>Detail fragment</h3>
               <button
                 type="button"
                 className="danger-button small-button"
-                onClick={() => deleteFragment(selectedFragment.id)}
-                disabled={busyFragmentId === selectedFragment.id}
+                onClick={() => deleteFragment(visibleSelectedFragment.id)}
+                disabled={busyFragmentId === visibleSelectedFragment.id}
               >
                 Hapus fragment
               </button>
             </div>
             <input
-              value={selectedFragment.title || ''}
+              value={visibleSelectedFragment.title || ''}
               onChange={(event) =>
                 onUpdateFragmentDetail(
-                  selectedFragment.id,
+                  visibleSelectedFragment.id,
                   'title',
                   event.target.value,
                 )
@@ -1945,10 +2120,10 @@ function TimelinePlot({
               placeholder="Judul fragment"
             />
             <textarea
-              value={selectedFragment.content || ''}
+              value={visibleSelectedFragment.content || ''}
               onChange={(event) =>
                 onUpdateFragmentDetail(
-                  selectedFragment.id,
+                  visibleSelectedFragment.id,
                   'content',
                   event.target.value,
                 )
@@ -1956,22 +2131,43 @@ function TimelinePlot({
               placeholder="Isi/catatan"
               rows={7}
             />
+            <label className="fragment-chapter-select">
+              Arc
+              <select
+                value={visibleSelectedFragment.chapter || defaultTimelineChapter}
+                onChange={(event) => {
+                  onUpdateFragmentChapter(
+                    visibleSelectedFragment.id,
+                    event.target.value,
+                  )
+                  setSelectedFragmentId(null)
+                }}
+              >
+                {timelineChapters.map((chapter) => (
+                  <option key={chapter} value={chapter}>
+                    {chapter}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="character-picker">
               <button
                 type="button"
                 className="character-picker-trigger"
                 onClick={() =>
                   setOpenPickerId((current) =>
-                    current === selectedFragment.id ? null : selectedFragment.id,
+                    current === visibleSelectedFragment.id
+                      ? null
+                      : visibleSelectedFragment.id,
                   )
                 }
               >
-                {getLinkedCharacterIds(selectedFragment.id).length === 0
+                {getLinkedCharacterIds(visibleSelectedFragment.id).length === 0
                   ? '+ Pilih karakter'
-                  : `${getLinkedCharacterIds(selectedFragment.id).length} karakter terpilih`}
+                  : `${getLinkedCharacterIds(visibleSelectedFragment.id).length} karakter terpilih`}
               </button>
 
-              {openPickerId === selectedFragment.id && (
+              {openPickerId === visibleSelectedFragment.id && (
                 <div className="checkbox-popover">
                   {characters.length === 0 ? (
                     <p className="empty-state">Belum ada karakter untuk dipilih.</p>
@@ -1979,7 +2175,7 @@ function TimelinePlot({
                     <div className="checkbox-list">
                       {characters.map((character) => {
                         const linkedCharacterIds = getLinkedCharacterIds(
-                          selectedFragment.id,
+                          visibleSelectedFragment.id,
                         )
                         const isChecked = linkedCharacterIds.includes(character.id)
 
@@ -1990,12 +2186,14 @@ function TimelinePlot({
                               checked={isChecked}
                               onChange={(event) =>
                                 toggleFragmentCharacter(
-                                  selectedFragment.id,
+                                  visibleSelectedFragment.id,
                                   character.id,
                                   event.target.checked,
                                 )
                               }
-                              disabled={busyFragmentId === selectedFragment.id}
+                              disabled={
+                                busyFragmentId === visibleSelectedFragment.id
+                              }
                             />
                             <span>{getCharacterDisplayName(character)}</span>
                           </label>
@@ -2007,14 +2205,16 @@ function TimelinePlot({
               )}
 
               <div className="fragment-badges">
-                {getLinkedCharacterIds(selectedFragment.id).length === 0 ? (
+                {getLinkedCharacterIds(visibleSelectedFragment.id).length === 0 ? (
                   <span className="muted-badge">Belum ada karakter</span>
                 ) : (
-                  getLinkedCharacterIds(selectedFragment.id).map((characterId) => (
-                    <span className="character-badge" key={characterId}>
-                      {getCharacterName(characterId)}
-                    </span>
-                  ))
+                  getLinkedCharacterIds(visibleSelectedFragment.id).map(
+                    (characterId) => (
+                      <span className="character-badge" key={characterId}>
+                        {getCharacterName(characterId)}
+                      </span>
+                    ),
+                  )
                 )}
               </div>
             </div>
@@ -2289,6 +2489,13 @@ function StoryBoard({
   onDeleteFragmentConnection,
   onUpdateFragmentPosition,
   onUpdateFragmentDetail,
+  onUpdateFragmentChapter,
+  timelineChapters,
+  activeTimelineChapter,
+  onActiveTimelineChapterChange,
+  onAddTimelineChapter,
+  onRenameTimelineChapter,
+  onDeleteTimelineChapter,
   onSelectChapter,
   onAddChapter,
   onDeleteChapter,
@@ -2368,6 +2575,13 @@ function StoryBoard({
           onDeleteFragmentConnection={onDeleteFragmentConnection}
           onUpdateFragmentPosition={onUpdateFragmentPosition}
           onUpdateFragmentDetail={onUpdateFragmentDetail}
+          onUpdateFragmentChapter={onUpdateFragmentChapter}
+          timelineChapters={timelineChapters}
+          activeTimelineChapter={activeTimelineChapter}
+          onActiveTimelineChapterChange={onActiveTimelineChapterChange}
+          onAddTimelineChapter={onAddTimelineChapter}
+          onRenameTimelineChapter={onRenameTimelineChapter}
+          onDeleteTimelineChapter={onDeleteTimelineChapter}
         />
       )}
 
@@ -2391,6 +2605,13 @@ function StoryBoard({
 }
 
 function App() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'light'
+
+    return window.localStorage.getItem('melody-theme') === 'dark'
+      ? 'dark'
+      : 'light'
+  })
   const [characters, setCharacters] = useState([])
   const [inboxItems, setInboxItems] = useState([])
   const [relationships, setRelationships] = useState([])
@@ -2408,6 +2629,10 @@ function App() {
   const [comicSaveStatus, setComicSaveStatus] = useState({})
   const [activeTab, setActiveTab] = useState('inbox')
   const [activeStoryTab, setActiveStoryTab] = useState('full')
+  const [activeTimelineChapter, setActiveTimelineChapter] = useState(
+    defaultTimelineChapter,
+  )
+  const [sessionTimelineChapters, setSessionTimelineChapters] = useState([])
   const [characterSortMode, setCharacterSortMode] = useState('newest')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
@@ -2416,6 +2641,19 @@ function App() {
   const chapterSaveTimers = useRef(new Map())
   const comicSaveTimers = useRef(new Map())
   const fragmentSaveTimers = useRef(new Map())
+  const timelineChapters = useMemo(() => {
+    const chapterNames = new Set(sessionTimelineChapters)
+
+    storyFragments.forEach((fragment) => {
+      chapterNames.add(fragment.chapter || defaultTimelineChapter)
+    })
+
+    const timelineChapterList = Array.from(chapterNames).filter(Boolean)
+
+    return timelineChapterList.length > 0
+      ? timelineChapterList
+      : [defaultTimelineChapter]
+  }, [sessionTimelineChapters, storyFragments])
 
   const loadCharacters = useCallback(async () => {
     const { data, error } = await supabase
@@ -2567,6 +2805,11 @@ function App() {
     loadComicPages,
     loadComicPanels,
   ])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light'
+    window.localStorage.setItem('melody-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     const initialLoad = setTimeout(() => {
@@ -2751,6 +2994,7 @@ function App() {
         ...fragmentFields,
         position_x: fragmentFields.position_x ?? 120,
         position_y: fragmentFields.position_y ?? 120,
+        chapter: fragmentFields.chapter || defaultTimelineChapter,
         order_index: nextOrderIndex,
       })
       .select()
@@ -2804,6 +3048,7 @@ function App() {
       content: '',
       position_x: Number(parentFragment.position_x ?? 120) + 260,
       position_y: Number(parentFragment.position_y ?? 120) + 90,
+      chapter: parentFragment.chapter || defaultTimelineChapter,
       characterIds: [],
     })
 
@@ -2814,6 +3059,17 @@ function App() {
 
   async function addFragmentConnection(sourceId, targetId) {
     if (sourceId === targetId) return
+    const sourceFragment = storyFragments.find((fragment) => fragment.id === sourceId)
+    const targetFragment = storyFragments.find((fragment) => fragment.id === targetId)
+
+    if (
+      !sourceFragment ||
+      !targetFragment ||
+      (sourceFragment.chapter || defaultTimelineChapter) !==
+        (targetFragment.chapter || defaultTimelineChapter)
+    ) {
+      return
+    }
 
     const { error } = await supabase.from('fragment_connections').insert({
       from_fragment_id: sourceId,
@@ -2878,6 +3134,131 @@ function App() {
       current.map((item) => (item.id === id ? updatedFragment : item)),
     )
     scheduleFragmentSave(updatedFragment)
+  }
+
+  async function updateFragmentChapter(id, chapter) {
+    const { error } = await supabase
+      .from('story_fragments')
+      .update({ chapter })
+      .eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setSessionTimelineChapters((current) =>
+      current.includes(chapter) ? current : [...current, chapter],
+    )
+    setStoryFragments((current) =>
+      current.map((fragment) =>
+        fragment.id === id ? { ...fragment, chapter } : fragment,
+      ),
+    )
+  }
+
+  function addTimelineChapter(chapter) {
+    setSessionTimelineChapters((current) =>
+      current.includes(chapter) ? current : [...current, chapter],
+    )
+  }
+
+  async function renameTimelineChapter(oldChapter, newChapter) {
+    if (timelineChapters.includes(newChapter)) {
+      setErrorMessage('Nama arc sudah dipakai.')
+      return
+    }
+
+    const { error } = await supabase
+      .from('story_fragments')
+      .update({ chapter: newChapter })
+      .eq('chapter', oldChapter)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setSessionTimelineChapters((current) => {
+      const renamedChapters = current.map((chapter) =>
+        chapter === oldChapter ? newChapter : chapter,
+      )
+
+      return renamedChapters.includes(newChapter)
+        ? renamedChapters
+        : [...renamedChapters, newChapter]
+    })
+    setStoryFragments((current) =>
+      current.map((fragment) =>
+        (fragment.chapter || defaultTimelineChapter) === oldChapter
+          ? { ...fragment, chapter: newChapter }
+          : fragment,
+      ),
+    )
+    setActiveTimelineChapter((current) =>
+      current === oldChapter ? newChapter : current,
+    )
+  }
+
+  async function deleteTimelineChapter(chapter) {
+    const shouldDelete = window.confirm(
+      `Yakin ingin menghapus arc ${chapter}? Semua fragment dan koneksi di arc ini akan ikut terhapus. Tindakan ini tidak bisa dibatalkan.`,
+    )
+    if (!shouldDelete) return
+
+    const fragmentIds = storyFragments
+      .filter(
+        (fragment) => (fragment.chapter || defaultTimelineChapter) === chapter,
+      )
+      .map((fragment) => fragment.id)
+
+    if (fragmentIds.length > 0) {
+      const { error: connectionError } = await supabase
+        .from('fragment_connections')
+        .delete()
+        .or(
+          `from_fragment_id.in.(${fragmentIds.join(',')}),to_fragment_id.in.(${fragmentIds.join(',')})`,
+        )
+
+      if (connectionError) {
+        setErrorMessage(connectionError.message)
+        return
+      }
+
+      const { error: characterError } = await supabase
+        .from('fragment_characters')
+        .delete()
+        .in('fragment_id', fragmentIds)
+
+      if (characterError) {
+        setErrorMessage(characterError.message)
+        return
+      }
+
+      const { error: fragmentError } = await supabase
+        .from('story_fragments')
+        .delete()
+        .in('id', fragmentIds)
+
+      if (fragmentError) {
+        setErrorMessage(fragmentError.message)
+        return
+      }
+    }
+
+    setSessionTimelineChapters((current) =>
+      current.filter((item) => item !== chapter),
+    )
+    setActiveTimelineChapter((current) => {
+      if (current !== chapter) return current
+
+      return timelineChapters.find((item) => item !== chapter) || defaultTimelineChapter
+    })
+    await Promise.all([
+      loadStoryFragments(),
+      loadFragmentCharacters(),
+      loadFragmentConnections(),
+    ])
   }
 
   function scheduleFragmentSave(fragment) {
@@ -3337,15 +3718,32 @@ function App() {
           <p className="eyebrow">MelodyWeb</p>
           <h1>Story workspace</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setIsLoading(true)
-            loadData()
-          }}
-        >
-          Refresh data
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={() =>
+              setTheme((currentTheme) =>
+                currentTheme === 'dark' ? 'light' : 'dark',
+              )
+            }
+            aria-label={
+              theme === 'dark' ? 'Aktifkan tema terang' : 'Aktifkan tema gelap'
+            }
+          >
+            <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
+            {theme === 'dark' ? 'Terang' : 'Gelap'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsLoading(true)
+              loadData()
+            }}
+          >
+            Refresh data
+          </button>
+        </div>
       </header>
 
       {errorMessage && (
@@ -3428,6 +3826,13 @@ function App() {
               onDeleteFragmentConnection={deleteFragmentConnection}
               onUpdateFragmentPosition={updateFragmentPosition}
               onUpdateFragmentDetail={updateFragmentDetail}
+              onUpdateFragmentChapter={updateFragmentChapter}
+              timelineChapters={timelineChapters}
+              activeTimelineChapter={activeTimelineChapter}
+              onActiveTimelineChapterChange={setActiveTimelineChapter}
+              onAddTimelineChapter={addTimelineChapter}
+              onRenameTimelineChapter={renameTimelineChapter}
+              onDeleteTimelineChapter={deleteTimelineChapter}
               onSelectChapter={selectChapter}
               onAddChapter={addChapter}
               onDeleteChapter={deleteChapter}
