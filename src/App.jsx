@@ -10,10 +10,10 @@ const emptyCharacter = {
 }
 
 const navigationTabs = [
-  { id: 'inbox', label: 'Inbox' },
+  { id: 'inbox', label: 'Rak Ide' },
   { id: 'characters', label: 'Character Board' },
   { id: 'relationships', label: 'Relationship Map' },
-  { id: 'story', label: 'Loose Story Board' },
+  { id: 'story', label: 'Rak Cerita' },
 ]
 
 function formatDate(value) {
@@ -131,8 +131,8 @@ function Inbox({ characters, inboxItems, onRefresh, onError }) {
     <section className="panel">
       <div className="section-heading">
         <div>
-          <h2>Inbox</h2>
-          <p>Kumpulkan catatan mentah, lalu tempelkan ke karakter.</p>
+          <h2>Rak Ide</h2>
+          <p>Simpan ide mentah, lalu tempelkan ke karakter saat sudah cocok.</p>
         </div>
       </div>
 
@@ -150,7 +150,7 @@ function Inbox({ characters, inboxItems, onRefresh, onError }) {
 
       <div className="item-list">
         {inboxItems.length === 0 ? (
-          <p className="empty-state">Belum ada item inbox.</p>
+          <p className="empty-state">Belum ada ide di rak.</p>
         ) : (
           inboxItems.map((item) => (
             <article className="inbox-item" key={item.id}>
@@ -210,7 +210,7 @@ function CharacterBoard({
   onUnlinkInboxItem,
   saveStatus,
 }) {
-  const [expandedId, setExpandedId] = useState(null)
+  const [expandedCharacterKey, setExpandedCharacterKey] = useState(null)
 
   return (
     <section className="panel">
@@ -228,21 +228,22 @@ function CharacterBoard({
         <p className="empty-state">Belum ada karakter.</p>
       ) : (
         <div className="character-grid">
-          {characters.map((character) => {
-            const isExpanded = expandedId === character.id
+          {characters.map((character, index) => {
+            const characterKey = character.id || `character-${index}`
+            const isExpanded = expandedCharacterKey === characterKey
             const incomplete = isCharacterIncomplete(character)
 
             return (
               <article
                 className={`character-card ${incomplete ? 'incomplete' : ''}`}
-                key={character.id}
+                key={characterKey}
               >
                 <button
                   type="button"
                   className="card-summary"
                   onClick={() =>
-                    setExpandedId((current) =>
-                      current === character.id ? null : character.id,
+                    setExpandedCharacterKey((current) =>
+                      current === characterKey ? null : characterKey,
                     )
                   }
                 >
@@ -543,6 +544,8 @@ function StoryBoard({
 }) {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [selectedFormCharacterIds, setSelectedFormCharacterIds] = useState([])
+  const [isFormPickerOpen, setIsFormPickerOpen] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
   const [openPickerId, setOpenPickerId] = useState(null)
   const [busyFragmentId, setBusyFragmentId] = useState(null)
@@ -552,6 +555,7 @@ function StoryBoard({
     function closePickerOnOutsideClick(event) {
       if (!boardRef.current?.contains(event.target)) {
         setOpenPickerId(null)
+        setIsFormPickerOpen(false)
       }
     }
 
@@ -570,10 +574,13 @@ function StoryBoard({
     await onAddFragment({
       title: title.trim() || 'Potongan tanpa judul',
       content: content.trim(),
+      characterIds: selectedFormCharacterIds,
     })
 
     setTitle('')
     setContent('')
+    setSelectedFormCharacterIds([])
+    setIsFormPickerOpen(false)
   }
 
   function getLinkedCharacterIds(fragmentId) {
@@ -599,6 +606,16 @@ function StoryBoard({
     setBusyFragmentId(null)
   }
 
+  function toggleFormCharacter(characterId, isChecked) {
+    setSelectedFormCharacterIds((current) => {
+      if (isChecked) {
+        return current.includes(characterId) ? current : [...current, characterId]
+      }
+
+      return current.filter((id) => id !== characterId)
+    })
+  }
+
   async function moveFragment(fragmentId, direction) {
     setBusyFragmentId(fragmentId)
     await onMoveFragment(fragmentId, direction)
@@ -615,8 +632,8 @@ function StoryBoard({
     <section className="panel storyboard-panel" ref={boardRef}>
       <div className="section-heading">
         <div>
-          <h2>Loose Story Board</h2>
-          <p>Susun potongan cerita bebas sebelum dirapikan menjadi alur final.</p>
+          <h2>Rak Cerita</h2>
+          <p>Susun potongan cerita lepas sebelum dirapikan menjadi alur final.</p>
         </div>
       </div>
 
@@ -632,6 +649,58 @@ function StoryBoard({
           placeholder="Isi/catatan"
           rows={4}
         />
+        <div className="character-picker">
+          <button
+            type="button"
+            className="character-picker-trigger"
+            onClick={() => setIsFormPickerOpen((current) => !current)}
+          >
+            {selectedFormCharacterIds.length === 0
+              ? '+ Pilih karakter'
+              : `${selectedFormCharacterIds.length} karakter terpilih`}
+          </button>
+
+          {isFormPickerOpen && (
+            <div className="checkbox-popover">
+              {characters.length === 0 ? (
+                <p className="empty-state">Belum ada karakter untuk dipilih.</p>
+              ) : (
+                <div className="checkbox-list">
+                  {characters.map((character) => {
+                    const isChecked = selectedFormCharacterIds.includes(
+                      character.id,
+                    )
+
+                    return (
+                      <label className="checkbox-option" key={character.id}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(event) =>
+                            toggleFormCharacter(character.id, event.target.checked)
+                          }
+                        />
+                        <span>{getCharacterDisplayName(character)}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="fragment-badges">
+            {selectedFormCharacterIds.length === 0 ? (
+              <span className="muted-badge">Belum ada karakter</span>
+            ) : (
+              selectedFormCharacterIds.map((characterId) => (
+                <span className="character-badge" key={characterId}>
+                  {getCharacterName(characterId)}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
         <button type="submit" disabled={!title.trim() && !content.trim()}>
           Tambah
         </button>
@@ -996,23 +1065,44 @@ function App() {
   }
 
   async function addFragment(fragment) {
+    const { characterIds, ...fragmentFields } = fragment
     const nextOrderIndex =
       storyFragments.reduce(
         (highest, item) => Math.max(highest, item.order_index ?? 0),
         0,
       ) + 1
 
-    const { error } = await supabase.from('story_fragments').insert({
-      ...fragment,
-      order_index: nextOrderIndex,
-    })
+    const { data, error } = await supabase
+      .from('story_fragments')
+      .insert({
+        ...fragmentFields,
+        order_index: nextOrderIndex,
+      })
+      .select()
+      .single()
 
     if (error) {
       setErrorMessage(error.message)
       return
     }
 
-    await loadStoryFragments()
+    if (characterIds.length > 0) {
+      const { error: linkError } = await supabase
+        .from('fragment_characters')
+        .insert(
+          characterIds.map((characterId) => ({
+            fragment_id: data.id,
+            character_id: characterId,
+          })),
+        )
+
+      if (linkError) {
+        setErrorMessage(linkError.message)
+        return
+      }
+    }
+
+    await Promise.all([loadStoryFragments(), loadFragmentCharacters()])
   }
 
   async function deleteFragment(id) {
