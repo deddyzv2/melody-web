@@ -11,6 +11,7 @@ import ReactFlow, {
   addEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { supabase } from './supabaseClient'
@@ -36,6 +37,13 @@ const storySubTabs = [
   { id: 'timeline', label: 'Timeline Plot' },
   { id: 'komik', label: 'Versi Komik' },
 ]
+
+const deleteConfirmationMessage =
+  'Yakin ingin menghapus ini? Tindakan ini tidak bisa dibatalkan.'
+
+function confirmDelete() {
+  return window.confirm(deleteConfirmationMessage)
+}
 
 function formatDate(value) {
   if (!value) return ''
@@ -166,6 +174,8 @@ function Inbox({ characters, inboxItems, onRefresh, onError }) {
   }
 
   async function deleteInboxItem(id) {
+    if (!confirmDelete()) return
+
     setBusyItemId(id)
     const { error } = await supabase.from('inbox_items').delete().eq('id', id)
 
@@ -474,7 +484,10 @@ function RelationshipEdge({
   markerEnd,
   data,
 }) {
+  const { getZoom } = useReactFlow()
   const offset = data?.offset || 0
+  const labelOffsetX = data?.labelOffsetX || 0
+  const labelOffsetY = data?.labelOffsetY || 0
   const dx = targetX - sourceX
   const dy = targetY - sourceY
   const length = Math.hypot(dx, dy) || 1
@@ -485,8 +498,37 @@ function RelationshipEdge({
   const controlX = midX + normalX * offset
   const controlY = midY + normalY * offset
   const edgePath = `M ${sourceX},${sourceY} Q ${controlX},${controlY} ${targetX},${targetY}`
-  const labelX = 0.25 * sourceX + 0.5 * controlX + 0.25 * targetX
-  const labelY = 0.25 * sourceY + 0.5 * controlY + 0.25 * targetY
+  const labelX = 0.25 * sourceX + 0.5 * controlX + 0.25 * targetX + labelOffsetX
+  const labelY = 0.25 * sourceY + 0.5 * controlY + 0.25 * targetY + labelOffsetY
+
+  function startLabelDrag(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const zoom = getZoom() || 1
+    const startClientX = event.clientX
+    const startClientY = event.clientY
+    const startOffsetX = labelOffsetX
+    const startOffsetY = labelOffsetY
+    let latestOffsetX = startOffsetX
+    let latestOffsetY = startOffsetY
+
+    function moveLabel(moveEvent) {
+      moveEvent.preventDefault()
+      latestOffsetX = startOffsetX + (moveEvent.clientX - startClientX) / zoom
+      latestOffsetY = startOffsetY + (moveEvent.clientY - startClientY) / zoom
+      data?.onLabelOffsetChange?.(id, latestOffsetX, latestOffsetY, false)
+    }
+
+    function stopLabelDrag() {
+      document.removeEventListener('pointermove', moveLabel)
+      document.removeEventListener('pointerup', stopLabelDrag)
+      data?.onLabelOffsetChange?.(id, latestOffsetX, latestOffsetY, true)
+    }
+
+    document.addEventListener('pointermove', moveLabel)
+    document.addEventListener('pointerup', stopLabelDrag, { once: true })
+  }
 
   return (
     <>
@@ -498,7 +540,8 @@ function RelationshipEdge({
       />
       <EdgeLabelRenderer>
         <div
-          className="relationship-flow-edge-label"
+          className="relationship-flow-edge-label nodrag nopan"
+          onPointerDown={startLabelDrag}
           style={{
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
           }}
@@ -518,12 +561,19 @@ function RelationshipMap({
   relationships,
   onAddRelationship,
   onDeleteRelationship,
+  onUpdateRelationship,
   onUpdateCharacterPosition,
 }) {
   const [characterA, setCharacterA] = useState('')
   const [characterB, setCharacterB] = useState('')
   const [relationType, setRelationType] = useState('')
   const [busyRelationshipId, setBusyRelationshipId] = useState(null)
+  const [editingRelationshipId, setEditingRelationshipId] = useState(null)
+  const [editDraft, setEditDraft] = useState({
+    character_a: '',
+    character_b: '',
+    relation_type: '',
+  })
   const { hasIsolatedCharacters, positions } = useMemo(
     () => buildRelationshipLayout(characters, relationships),
     [characters, relationships],
@@ -531,14 +581,51 @@ function RelationshipMap({
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const positionSaveTimers = useRef(new Map())
+  const labelSaveTimers = useRef(new Map())
 
   useEffect(() => {
     const timers = positionSaveTimers.current
+    const labelTimers = labelSaveTimers.current
 
     return () => {
       timers.forEach((timer) => clearTimeout(timer))
+      labelTimers.forEach((timer) => clearTimeout(timer))
     }
   }, [])
+
+  const updateRelationshipLabelOffset = useCallback(
+    (id, labelOffsetX, labelOffsetY, shouldSave) => {
+      setEdges((currentEdges) =>
+        currentEdges.map((edge) =>
+          edge.id === id
+            ? {
+                ...edge,
+                data: {
+                  ...edge.data,
+                  labelOffsetX,
+                  labelOffsetY,
+                },
+              }
+            : edge,
+        ),
+      )
+
+      if (!shouldSave) return
+
+      const currentTimer = labelSaveTimers.current.get(id)
+      if (currentTimer) clearTimeout(currentTimer)
+
+      const timer = setTimeout(() => {
+        onUpdateRelationship(id, {
+          label_offset_x: labelOffsetX,
+          label_offset_y: labelOffsetY,
+        })
+      }, 300)
+
+      labelSaveTimers.current.set(id, timer)
+    },
+    [onUpdateRelationship, setEdges],
+  )
 
   useEffect(() => {
     setNodes(
@@ -601,6 +688,9 @@ function RelationshipMap({
         data: {
           label: relationship.relation_type || 'relasi',
           offset: offsetById.get(relationship.id) || 0,
+          labelOffsetX: Number(relationship.label_offset_x || 0),
+          labelOffsetY: Number(relationship.label_offset_y || 0),
+          onLabelOffsetChange: updateRelationshipLabelOffset,
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -610,7 +700,7 @@ function RelationshipMap({
         },
       })),
     )
-  }, [relationships, setEdges])
+  }, [relationships, setEdges, updateRelationshipLabelOffset])
 
   function getCharacterName(id) {
     const character = characters.find((item) => item.id === id)
@@ -637,6 +727,44 @@ function RelationshipMap({
     setBusyRelationshipId(id)
     await onDeleteRelationship(id)
     setBusyRelationshipId(null)
+  }
+
+  function startEditRelationship(relationship) {
+    setEditingRelationshipId(relationship.id)
+    setEditDraft({
+      character_a: relationship.character_a || '',
+      character_b: relationship.character_b || '',
+      relation_type: relationship.relation_type || '',
+    })
+  }
+
+  function cancelEditRelationship() {
+    setEditingRelationshipId(null)
+    setEditDraft({
+      character_a: '',
+      character_b: '',
+      relation_type: '',
+    })
+  }
+
+  async function saveRelationshipEdit(id) {
+    if (
+      !editDraft.character_a ||
+      !editDraft.character_b ||
+      editDraft.character_a === editDraft.character_b ||
+      !editDraft.relation_type.trim()
+    ) {
+      return
+    }
+
+    setBusyRelationshipId(id)
+    const isSaved = await onUpdateRelationship(id, {
+      character_a: editDraft.character_a,
+      character_b: editDraft.character_b,
+      relation_type: editDraft.relation_type.trim(),
+    })
+    setBusyRelationshipId(null)
+    if (isSaved) cancelEditRelationship()
   }
 
   function moveCharacterNodeEnd(_event, node) {
@@ -709,30 +837,6 @@ function RelationshipMap({
         </button>
       </form>
 
-      <div className="relationship-list">
-        {relationships.length === 0 ? (
-          <p className="empty-state">Belum ada relasi.</p>
-        ) : (
-          relationships.map((relationship) => (
-            <article className="relationship-row" key={relationship.id}>
-              <span>
-                {getCharacterName(relationship.character_a)} {'\u2192'}{' '}
-                {relationship.relation_type || 'relasi'} {'\u2192'}{' '}
-                {getCharacterName(relationship.character_b)}
-              </span>
-              <button
-                type="button"
-                className="danger-button small-button"
-                onClick={() => deleteRelationship(relationship.id)}
-                disabled={busyRelationshipId === relationship.id}
-              >
-                Hapus
-              </button>
-            </article>
-          ))
-        )}
-      </div>
-
       <section className="map-section">
         <h3>Visualisasi peta relasi</h3>
         {characters.length === 0 ? (
@@ -767,6 +871,130 @@ function RelationshipMap({
             </ReactFlow>
           </div>
         )}
+      </section>
+
+      <section className="relationship-list-section">
+        <h3>Daftar relasi</h3>
+        <div className="relationship-list">
+          {relationships.length === 0 ? (
+            <p className="empty-state">Belum ada relasi.</p>
+          ) : (
+            relationships.map((relationship) => {
+              const isEditing = editingRelationshipId === relationship.id
+
+              return (
+                <article
+                  className={`relationship-row ${isEditing ? 'editing' : ''}`}
+                  key={relationship.id}
+                >
+                  {isEditing ? (
+                    <div className="relationship-edit-form">
+                      <label>
+                        Dari
+                        <select
+                          value={editDraft.character_a}
+                          onChange={(event) =>
+                            setEditDraft((current) => ({
+                              ...current,
+                              character_a: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Pilih karakter</option>
+                          {characters.map((character) => (
+                            <option key={character.id} value={character.id}>
+                              {getCharacterDisplayName(character)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Relasi
+                        <input
+                          value={editDraft.relation_type}
+                          onChange={(event) =>
+                            setEditDraft((current) => ({
+                              ...current,
+                              relation_type: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Ke
+                        <select
+                          value={editDraft.character_b}
+                          onChange={(event) =>
+                            setEditDraft((current) => ({
+                              ...current,
+                              character_b: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Pilih karakter</option>
+                          {characters.map((character) => (
+                            <option key={character.id} value={character.id}>
+                              {getCharacterDisplayName(character)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="relationship-row-actions">
+                        <button
+                          type="button"
+                          className="small-button"
+                          onClick={() => saveRelationshipEdit(relationship.id)}
+                          disabled={
+                            busyRelationshipId === relationship.id ||
+                            !editDraft.character_a ||
+                            !editDraft.character_b ||
+                            editDraft.character_a === editDraft.character_b ||
+                            !editDraft.relation_type.trim()
+                          }
+                        >
+                          Simpan
+                        </button>
+                        <button
+                          type="button"
+                          className="small-button"
+                          onClick={cancelEditRelationship}
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <span>
+                        {getCharacterName(relationship.character_a)} {'\u2192'}{' '}
+                        {relationship.relation_type || 'relasi'} {'\u2192'}{' '}
+                        {getCharacterName(relationship.character_b)}
+                      </span>
+                      <div className="relationship-row-actions">
+                        <button
+                          type="button"
+                          className="small-button"
+                          onClick={() => startEditRelationship(relationship)}
+                          disabled={busyRelationshipId === relationship.id}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-button small-button"
+                          onClick={() => deleteRelationship(relationship.id)}
+                          disabled={busyRelationshipId === relationship.id}
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              )
+            })
+          )}
+        </div>
       </section>
     </section>
   )
@@ -1935,6 +2163,8 @@ function App() {
   }
 
   async function deleteRelationship(id) {
+    if (!confirmDelete()) return
+
     const { error } = await supabase.from('relationships').delete().eq('id', id)
 
     if (error) {
@@ -1943,6 +2173,21 @@ function App() {
     }
 
     await loadRelationships()
+  }
+
+  async function updateRelationship(id, relationship) {
+    const { error } = await supabase
+      .from('relationships')
+      .update(relationship)
+      .eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return false
+    }
+
+    await loadRelationships()
+    return true
   }
 
   async function addFragment(fragment) {
@@ -1993,6 +2238,8 @@ function App() {
   }
 
   async function deleteFragment(id) {
+    if (!confirmDelete()) return
+
     const { error } = await supabase.from('story_fragments').delete().eq('id', id)
 
     if (error) {
@@ -2040,6 +2287,8 @@ function App() {
   }
 
   async function deleteFragmentConnection(id) {
+    if (!confirmDelete()) return
+
     const { error } = await supabase
       .from('fragment_connections')
       .delete()
@@ -2181,6 +2430,8 @@ function App() {
   }
 
   async function deleteChapter(id) {
+    if (!confirmDelete()) return
+
     const chapter = storyChapters.find((item) => item.id === id)
     const { error } = await supabase.from('story_chapters').delete().eq('id', id)
 
@@ -2329,6 +2580,8 @@ function App() {
   }
 
   async function deleteComicPage(id) {
+    if (!confirmDelete()) return
+
     const { error } = await supabase.from('comic_pages').delete().eq('id', id)
 
     if (error) {
@@ -2444,6 +2697,8 @@ function App() {
   }
 
   async function deleteComicPanel(id) {
+    if (!confirmDelete()) return
+
     const { error } = await supabase.from('comic_panels').delete().eq('id', id)
 
     if (error) {
@@ -2601,6 +2856,7 @@ function App() {
               relationships={relationships}
               onAddRelationship={addRelationship}
               onDeleteRelationship={deleteRelationship}
+              onUpdateRelationship={updateRelationship}
               onUpdateCharacterPosition={updateCharacterPosition}
             />
           )}
