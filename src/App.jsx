@@ -16,6 +16,13 @@ const navigationTabs = [
   { id: 'story', label: 'Rak Cerita' },
 ]
 
+const storySubTabs = [
+  { id: 'full', label: 'Cerita Full' },
+  { id: 'ringkasan', label: 'Cerita Ringkasan' },
+  { id: 'timeline', label: 'Timeline Plot' },
+  { id: 'komik', label: 'Versi Komik' },
+]
+
 function formatDate(value) {
   if (!value) return ''
 
@@ -254,85 +261,114 @@ function CharacterBoard({
                   {incomplete && <span className="badge">Belum lengkap</span>}
                 </button>
 
-                {isExpanded && (
-                  <div className="character-form">
-                    <label>
-                      Nama
-                      <input
-                        value={character.name || ''}
-                        onChange={(event) =>
-                          onUpdateCharacter(character.id, 'name', event.target.value)
-                        }
-                      />
-                    </label>
-                    <label>
-                      Role
-                      <input
-                        value={character.role || ''}
-                        onChange={(event) =>
-                          onUpdateCharacter(character.id, 'role', event.target.value)
-                        }
-                      />
-                    </label>
-                    <label>
-                      Personality
-                      <textarea
-                        value={character.personality || ''}
-                        onChange={(event) =>
-                          onUpdateCharacter(
-                            character.id,
-                            'personality',
-                            event.target.value,
-                          )
-                        }
-                        rows={4}
-                      />
-                    </label>
-                    <label>
-                      Visual notes
-                      <textarea
-                        value={character.visual_notes || ''}
-                        onChange={(event) =>
-                          onUpdateCharacter(
-                            character.id,
-                            'visual_notes',
-                            event.target.value,
-                          )
-                        }
-                        rows={4}
-                      />
-                    </label>
-                    <div className="related-ideas">
-                      <h3>Ide terkait</h3>
-                      {inboxItems.filter((item) => item.linked_to === character.id)
-                        .length === 0 ? (
-                        <p className="related-placeholder">
-                          Belum ada ide yang ditempel
-                        </p>
-                      ) : (
-                        <div className="related-list">
-                          {inboxItems
-                            .filter((item) => item.linked_to === character.id)
-                            .map((item) => (
-                              <article className="related-item" key={item.id}>
-                                <p>{item.content}</p>
-                                <button
-                                  type="button"
-                                  className="small-button"
-                                  onClick={() => onUnlinkInboxItem(item.id)}
-                                >
-                                  Lepas
-                                </button>
-                              </article>
-                            ))}
-                        </div>
-                      )}
+                <div
+                  className={`character-expand ${isExpanded ? 'expanded' : ''}`}
+                  aria-hidden={!isExpanded}
+                >
+                  <div className="character-expand-inner">
+                    <div className="character-form">
+                      <div className="character-form-header">
+                        <h3>Edit karakter</h3>
+                        <button
+                          type="button"
+                          className="small-button"
+                          onClick={() => setExpandedCharacterKey(null)}
+                          tabIndex={isExpanded ? 0 : -1}
+                        >
+                          Tutup
+                        </button>
+                      </div>
+                      <label>
+                        Nama
+                        <input
+                          value={character.name || ''}
+                          onChange={(event) =>
+                            onUpdateCharacter(
+                              character.id,
+                              'name',
+                              event.target.value,
+                            )
+                          }
+                          tabIndex={isExpanded ? 0 : -1}
+                        />
+                      </label>
+                      <label>
+                        Role
+                        <input
+                          value={character.role || ''}
+                          onChange={(event) =>
+                            onUpdateCharacter(
+                              character.id,
+                              'role',
+                              event.target.value,
+                            )
+                          }
+                          tabIndex={isExpanded ? 0 : -1}
+                        />
+                      </label>
+                      <label>
+                        Personality
+                        <textarea
+                          value={character.personality || ''}
+                          onChange={(event) =>
+                            onUpdateCharacter(
+                              character.id,
+                              'personality',
+                              event.target.value,
+                            )
+                          }
+                          rows={4}
+                          tabIndex={isExpanded ? 0 : -1}
+                        />
+                      </label>
+                      <label>
+                        Visual notes
+                        <textarea
+                          value={character.visual_notes || ''}
+                          onChange={(event) =>
+                            onUpdateCharacter(
+                              character.id,
+                              'visual_notes',
+                              event.target.value,
+                            )
+                          }
+                          rows={4}
+                          tabIndex={isExpanded ? 0 : -1}
+                        />
+                      </label>
+                      <div className="related-ideas">
+                        <h3>Ide terkait</h3>
+                        {inboxItems.filter((item) => item.linked_to === character.id)
+                          .length === 0 ? (
+                          <p className="related-placeholder">
+                            Belum ada ide yang ditempel
+                          </p>
+                        ) : (
+                          <div className="related-list">
+                            {inboxItems
+                              .filter((item) => item.linked_to === character.id)
+                              .map((item) => (
+                                <article className="related-item" key={item.id}>
+                                  <p>{item.content}</p>
+                                  <button
+                                    type="button"
+                                    className="small-button"
+                                    onClick={() => onUnlinkInboxItem(item.id)}
+                                    tabIndex={isExpanded ? 0 : -1}
+                                  >
+                                    Lepas
+                                  </button>
+                                </article>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                      <p className="save-status">
+                        {saveStatus[character.id] || 'Perubahan tersimpan otomatis'}
+                      </p>
                     </div>
-                    <p className="save-status">
-                      {saveStatus[character.id] || 'Perubahan tersimpan otomatis'}
-                    </p>
                   </div>
-                )}
+                </div>
               </article>
             )
           })}
@@ -532,7 +568,124 @@ function RelationshipMap({
   )
 }
 
-function StoryBoard({
+function ChapterEditor({
+  type,
+  chapters,
+  selectedChapterId,
+  saveStatus,
+  onSelectChapter,
+  onAddChapter,
+  onDeleteChapter,
+  onMoveChapter,
+  onUpdateChapter,
+}) {
+  const filteredChapters = chapters
+    .filter((chapter) => chapter.type === type)
+    .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+  const selectedChapter =
+    filteredChapters.find((chapter) => chapter.id === selectedChapterId) ||
+    filteredChapters[0]
+
+  useEffect(() => {
+    if (!selectedChapter && selectedChapterId) {
+      onSelectChapter(type, null)
+    }
+  }, [onSelectChapter, selectedChapter, selectedChapterId, type])
+
+  function formatSavedAt(value) {
+    if (!value) return 'Belum tersimpan'
+
+    return `Tersimpan terakhir ${formatDate(value)}`
+  }
+
+  return (
+    <div className="chapter-workspace">
+      <aside className="chapter-sidebar">
+        <button type="button" onClick={() => onAddChapter(type)}>
+          + Chapter baru
+        </button>
+
+        {filteredChapters.length === 0 ? (
+          <p className="empty-state">Belum ada chapter.</p>
+        ) : (
+          <div className="chapter-list">
+            {filteredChapters.map((chapter, index) => (
+              <article
+                className={`chapter-list-item ${
+                  selectedChapter?.id === chapter.id ? 'active' : ''
+                }`}
+                key={chapter.id}
+              >
+                <button
+                  type="button"
+                  className="chapter-title-button"
+                  onClick={() => onSelectChapter(type, chapter.id)}
+                >
+                  {chapter.title || 'Chapter tanpa judul'}
+                </button>
+                <div className="chapter-row-actions">
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => onMoveChapter(type, chapter.id, 'up')}
+                    disabled={index === 0}
+                  >
+                    Atas
+                  </button>
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => onMoveChapter(type, chapter.id, 'down')}
+                    disabled={index === filteredChapters.length - 1}
+                  >
+                    Bawah
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-button small-button"
+                    onClick={() => onDeleteChapter(chapter.id)}
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </aside>
+
+      <section className="chapter-editor">
+        {selectedChapter ? (
+          <>
+            <input
+              value={selectedChapter.title || ''}
+              onChange={(event) =>
+                onUpdateChapter(selectedChapter.id, 'title', event.target.value)
+              }
+              placeholder="Judul chapter"
+            />
+            <textarea
+              value={selectedChapter.content || ''}
+              onChange={(event) =>
+                onUpdateChapter(selectedChapter.id, 'content', event.target.value)
+              }
+              placeholder="Tulis cerita di sini..."
+              rows={18}
+            />
+            <p className="save-status">
+              {saveStatus[selectedChapter.id] ||
+                formatSavedAt(selectedChapter.updated_at)}
+            </p>
+          </>
+        ) : (
+          <p className="empty-state">Pilih atau buat chapter baru.</p>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function TimelinePlot({
   characters,
   storyFragments,
   fragmentCharacters,
@@ -629,14 +782,7 @@ function StoryBoard({
   }
 
   return (
-    <section className="panel storyboard-panel" ref={boardRef}>
-      <div className="section-heading">
-        <div>
-          <h2>Rak Cerita</h2>
-          <p>Susun potongan cerita lepas sebelum dirapikan menjadi alur final.</p>
-        </div>
-      </div>
-
+    <div className="timeline-panel" ref={boardRef}>
       <form className="story-form" onSubmit={submitFragment}>
         <input
           value={title}
@@ -840,6 +986,98 @@ function StoryBoard({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function StoryBoard({
+  characters,
+  storyFragments,
+  fragmentCharacters,
+  storyChapters,
+  selectedChapterIds,
+  chapterSaveStatus,
+  onAddFragment,
+  onDeleteFragment,
+  onAttachFragmentCharacter,
+  onDetachFragmentCharacter,
+  onMoveFragment,
+  onSelectChapter,
+  onAddChapter,
+  onDeleteChapter,
+  onMoveChapter,
+  onUpdateChapter,
+}) {
+  const [activeStoryTab, setActiveStoryTab] = useState('full')
+
+  return (
+    <section className="panel storyboard-panel">
+      <div className="section-heading">
+        <div>
+          <h2>Rak Cerita</h2>
+          <p>Simpan versi panjang, ringkasan, plot, dan naskah komik di satu rak.</p>
+        </div>
+      </div>
+
+      <nav className="story-subtabs" aria-label="Navigasi Rak Cerita">
+        {storySubTabs.map((tab) => (
+          <button
+            type="button"
+            className={activeStoryTab === tab.id ? 'active' : ''}
+            key={tab.id}
+            onClick={() => setActiveStoryTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {activeStoryTab === 'full' && (
+        <ChapterEditor
+          type="full"
+          chapters={storyChapters}
+          selectedChapterId={selectedChapterIds.full}
+          saveStatus={chapterSaveStatus}
+          onSelectChapter={onSelectChapter}
+          onAddChapter={onAddChapter}
+          onDeleteChapter={onDeleteChapter}
+          onMoveChapter={onMoveChapter}
+          onUpdateChapter={onUpdateChapter}
+        />
+      )}
+
+      {activeStoryTab === 'ringkasan' && (
+        <ChapterEditor
+          type="ringkasan"
+          chapters={storyChapters}
+          selectedChapterId={selectedChapterIds.ringkasan}
+          saveStatus={chapterSaveStatus}
+          onSelectChapter={onSelectChapter}
+          onAddChapter={onAddChapter}
+          onDeleteChapter={onDeleteChapter}
+          onMoveChapter={onMoveChapter}
+          onUpdateChapter={onUpdateChapter}
+        />
+      )}
+
+      {activeStoryTab === 'timeline' && (
+        <TimelinePlot
+          characters={characters}
+          storyFragments={storyFragments}
+          fragmentCharacters={fragmentCharacters}
+          onAddFragment={onAddFragment}
+          onDeleteFragment={onDeleteFragment}
+          onAttachFragmentCharacter={onAttachFragmentCharacter}
+          onDetachFragmentCharacter={onDetachFragmentCharacter}
+          onMoveFragment={onMoveFragment}
+        />
+      )}
+
+      {activeStoryTab === 'komik' && (
+        <div className="coming-soon">
+          <p>Segera hadir</p>
+        </div>
+      )}
     </section>
   )
 }
@@ -850,11 +1088,18 @@ function App() {
   const [relationships, setRelationships] = useState([])
   const [storyFragments, setStoryFragments] = useState([])
   const [fragmentCharacters, setFragmentCharacters] = useState([])
+  const [storyChapters, setStoryChapters] = useState([])
+  const [selectedChapterIds, setSelectedChapterIds] = useState({
+    full: null,
+    ringkasan: null,
+  })
+  const [chapterSaveStatus, setChapterSaveStatus] = useState({})
   const [activeTab, setActiveTab] = useState('inbox')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [saveStatus, setSaveStatus] = useState({})
   const saveTimers = useRef(new Map())
+  const chapterSaveTimers = useRef(new Map())
 
   const loadCharacters = useCallback(async () => {
     const { data, error } = await supabase
@@ -926,6 +1171,20 @@ function App() {
     setFragmentCharacters(data || [])
   }, [])
 
+  const loadStoryChapters = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('story_chapters')
+      .select('*')
+      .order('order_index', { ascending: true })
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setStoryChapters(data || [])
+  }, [])
+
   const loadData = useCallback(async () => {
     await Promise.all([
       loadCharacters(),
@@ -933,6 +1192,7 @@ function App() {
       loadRelationships(),
       loadStoryFragments(),
       loadFragmentCharacters(),
+      loadStoryChapters(),
     ])
     setIsLoading(false)
   }, [
@@ -941,6 +1201,7 @@ function App() {
     loadRelationships,
     loadStoryFragments,
     loadFragmentCharacters,
+    loadStoryChapters,
   ])
 
   useEffect(() => {
@@ -953,9 +1214,11 @@ function App() {
 
   useEffect(() => {
     const timers = saveTimers.current
+    const chapterTimers = chapterSaveTimers.current
 
     return () => {
       timers.forEach((timer) => clearTimeout(timer))
+      chapterTimers.forEach((timer) => clearTimeout(timer))
     }
   }, [])
 
@@ -1183,6 +1446,167 @@ function App() {
     await loadStoryFragments()
   }
 
+  function selectChapter(type, id) {
+    setSelectedChapterIds((current) => ({
+      ...current,
+      [type]: id,
+    }))
+  }
+
+  async function addChapter(type) {
+    const nextOrderIndex =
+      storyChapters
+        .filter((chapter) => chapter.type === type)
+        .reduce(
+          (highest, chapter) => Math.max(highest, chapter.order_index ?? 0),
+          0,
+        ) + 1
+
+    const { data, error } = await supabase
+      .from('story_chapters')
+      .insert({
+        type,
+        title: type === 'full' ? 'Chapter baru' : 'Ringkasan baru',
+        content: '',
+        order_index: nextOrderIndex,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    setStoryChapters((current) =>
+      [...current, data].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)),
+    )
+    selectChapter(type, data.id)
+  }
+
+  async function deleteChapter(id) {
+    const chapter = storyChapters.find((item) => item.id === id)
+    const { error } = await supabase.from('story_chapters').delete().eq('id', id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    if (chapter) {
+      setSelectedChapterIds((current) => ({
+        ...current,
+        [chapter.type]: current[chapter.type] === id ? null : current[chapter.type],
+      }))
+    }
+
+    await loadStoryChapters()
+  }
+
+  async function moveChapter(type, id, direction) {
+    const filteredChapters = storyChapters
+      .filter((chapter) => chapter.type === type)
+      .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+    const currentIndex = filteredChapters.findIndex((chapter) => chapter.id === id)
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    const currentChapter = filteredChapters[currentIndex]
+    const targetChapter = filteredChapters[targetIndex]
+
+    if (!currentChapter || !targetChapter) return
+
+    const { error: currentError } = await supabase
+      .from('story_chapters')
+      .update({
+        order_index: targetChapter.order_index,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', currentChapter.id)
+
+    if (currentError) {
+      setErrorMessage(currentError.message)
+      return
+    }
+
+    const { error: targetError } = await supabase
+      .from('story_chapters')
+      .update({
+        order_index: currentChapter.order_index,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', targetChapter.id)
+
+    if (targetError) {
+      setErrorMessage(targetError.message)
+      return
+    }
+
+    await loadStoryChapters()
+  }
+
+  function updateChapter(id, field, value) {
+    const chapter = storyChapters.find((item) => item.id === id)
+    if (!chapter) return
+
+    const updatedChapter = {
+      ...chapter,
+      [field]: value,
+      updated_at: new Date().toISOString(),
+    }
+
+    setStoryChapters((current) =>
+      current.map((item) => (item.id === id ? updatedChapter : item)),
+    )
+    scheduleChapterSave(updatedChapter)
+  }
+
+  function scheduleChapterSave(chapter) {
+    const currentTimer = chapterSaveTimers.current.get(chapter.id)
+    if (currentTimer) clearTimeout(currentTimer)
+
+    setChapterSaveStatus((current) => ({
+      ...current,
+      [chapter.id]: 'Menunggu auto-save...',
+    }))
+
+    const timer = setTimeout(async () => {
+      setChapterSaveStatus((current) => ({
+        ...current,
+        [chapter.id]: 'Menyimpan...',
+      }))
+
+      const savedAt = new Date().toISOString()
+      const { error } = await supabase
+        .from('story_chapters')
+        .update({
+          title: chapter.title,
+          content: chapter.content,
+          updated_at: savedAt,
+        })
+        .eq('id', chapter.id)
+
+      if (error) {
+        setErrorMessage(error.message)
+        setChapterSaveStatus((current) => ({
+          ...current,
+          [chapter.id]: 'Gagal menyimpan',
+        }))
+        return
+      }
+
+      setStoryChapters((current) =>
+        current.map((item) =>
+          item.id === chapter.id ? { ...item, updated_at: savedAt } : item,
+        ),
+      )
+      setChapterSaveStatus((current) => ({
+        ...current,
+        [chapter.id]: `Tersimpan terakhir ${formatDate(savedAt)}`,
+      }))
+    }, 800)
+
+    chapterSaveTimers.current.set(chapter.id, timer)
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -1261,11 +1685,19 @@ function App() {
               characters={characters}
               storyFragments={storyFragments}
               fragmentCharacters={fragmentCharacters}
+              storyChapters={storyChapters}
+              selectedChapterIds={selectedChapterIds}
+              chapterSaveStatus={chapterSaveStatus}
               onAddFragment={addFragment}
               onDeleteFragment={deleteFragment}
               onAttachFragmentCharacter={attachFragmentCharacter}
               onDetachFragmentCharacter={detachFragmentCharacter}
               onMoveFragment={moveFragment}
+              onSelectChapter={selectChapter}
+              onAddChapter={addChapter}
+              onDeleteChapter={deleteChapter}
+              onMoveChapter={moveChapter}
+              onUpdateChapter={updateChapter}
             />
           )}
         </>
